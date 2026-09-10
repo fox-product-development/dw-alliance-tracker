@@ -85,6 +85,7 @@ export default function UploadPage() {
 
     setBusy(true);
     setMessage("");
+    setError("");
 
     for (const name of newNames) {
       const created = await addPlayerByName(name);
@@ -100,9 +101,23 @@ export default function UploadPage() {
 
     setBusy(false);
 
-    if (result.error) setError(result.error);
-    else
-      setMessage(`Saved. ${result.present} present, ${result.absent} absent.`);
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    const total = result.present + result.absent;
+    const label = eventType === "frankie" ? "Frankie" : "Zombies";
+
+    setMessage(
+      `${label} — ${eventDate}. ${total} players updated, ` +
+        `${result.present} marked as attending, ${result.absent} marked as absent.`,
+    );
+
+    setData(null);
+    setChoices({});
+    setRenameFlags({});
+    setEventDate("");
   }
 
   const matched = data
