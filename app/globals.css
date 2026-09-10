@@ -1,0 +1,446 @@
+@import url("https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Rajdhani:wght@400;500;600;700&family=Share+Tech+Mono&display=swap");
+
+:root {
+  --bg-deep: #0a0c12;
+  --bg-panel: #10131e;
+  --bg-card: #151929;
+  --bg-input: #0d1020;
+  --border: #2a3050;
+  --border-glow: #4a6aff;
+  --accent: #e8a020;
+  --accent2: #ff6030;
+  --accent3: #30d4a0;
+  --text: #ccd4f0;
+  --text-dim: #6070a0;
+  --text-bright: #eef2ff;
+  --danger: #ff7060;
+  --warn: #ffb040;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background: var(--bg-deep);
+  color: var(--text);
+  font-family: "Rajdhani", sans-serif;
+  font-size: 16px;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(
+      ellipse at 20% 20%,
+      rgba(74, 106, 255, 0.05) 0%,
+      transparent 60%
+    ),
+    radial-gradient(
+      ellipse at 80% 80%,
+      rgba(232, 160, 32, 0.04) 0%,
+      transparent 60%
+    ),
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 40px,
+      rgba(255, 255, 255, 0.008) 40px,
+      rgba(255, 255, 255, 0.008) 41px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 40px,
+      rgba(255, 255, 255, 0.008) 40px,
+      rgba(255, 255, 255, 0.008) 41px
+    );
+  pointer-events: none;
+  z-index: 0;
+}
+
+.container {
+  position: relative;
+  z-index: 1;
+  max-width: 980px;
+  margin: 0 auto;
+  padding: 20px 16px 60px;
+}
+
+.game-title {
+  font-family: "Cinzel Decorative", serif;
+  font-size: clamp(22px, 5vw, 38px);
+  color: var(--accent);
+  text-shadow:
+    0 0 30px rgba(232, 160, 32, 0.6),
+    0 0 60px rgba(232, 160, 32, 0.3);
+  letter-spacing: 2px;
+}
+.game-title span {
+  color: var(--accent2);
+  text-shadow: 0 0 30px rgba(255, 96, 48, 0.7);
+}
+
+.subtitle {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 12px;
+  color: var(--text-dim);
+  letter-spacing: 4px;
+  margin-top: 8px;
+  text-transform: uppercase;
+}
+
+.mono {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+}
+
+.section-label {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin: 0 0 12px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.section-label::before,
+.section-label::after {
+  content: "";
+  flex: 1;
+  height: 1px;
+  background: var(--border);
+}
+
+a {
+  color: var(--accent3);
+  text-decoration: none;
+}
+a:hover {
+  text-decoration: underline;
+}
+
+/* Top navigation on inner pages */
+.topnav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 14px 0 16px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 24px;
+}
+.topnav a {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  padding: 7px 13px;
+  border: 1px solid transparent;
+  border-radius: 5px;
+  transition:
+    color 0.2s,
+    background 0.2s,
+    border-color 0.2s;
+}
+.topnav a:hover {
+  color: var(--text-bright);
+  background: rgba(74, 106, 255, 0.08);
+  border-color: rgba(74, 106, 255, 0.25);
+  text-decoration: none;
+}
+.topnav a.current {
+  color: var(--accent);
+  background: rgba(232, 160, 32, 0.1);
+  border-color: rgba(232, 160, 32, 0.35);
+}
+.topnav .spacer {
+  flex: 1;
+}
+
+/* Page heading */
+.page-title {
+  font-family: "Cinzel Decorative", serif;
+  font-size: 24px;
+  color: var(--accent);
+  text-shadow: 0 0 24px rgba(232, 160, 32, 0.45);
+  letter-spacing: 1px;
+  margin-bottom: 6px;
+}
+.page-sub {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 24px;
+}
+
+/* Cards */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 16px;
+  position: relative;
+  overflow: hidden;
+}
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--bcolor, var(--border-glow));
+  opacity: 0.85;
+}
+
+.panel {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+/* Tables */
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+}
+table.data th {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  text-align: left;
+  padding: 11px 14px;
+  background: rgba(0, 0, 0, 0.25);
+  font-weight: 400;
+}
+table.data td {
+  padding: 11px 14px;
+  border-top: 1px solid var(--border);
+  font-size: 15px;
+  vertical-align: middle;
+}
+table.data tr:hover td {
+  background: rgba(74, 106, 255, 0.04);
+}
+table.data .num {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 14px;
+  text-align: right;
+}
+table.data .dim {
+  color: var(--text-dim);
+}
+
+/* Controls */
+input,
+select,
+textarea {
+  font-family: "Share Tech Mono", monospace;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-bright);
+  font-size: 14px;
+  padding: 8px 10px;
+  border-radius: 5px;
+}
+input:focus,
+select:focus {
+  outline: none;
+  border-color: var(--border-glow);
+  box-shadow: 0 0 0 2px rgba(74, 106, 255, 0.15);
+}
+input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  accent-color: var(--accent3);
+  padding: 0;
+}
+input[type="file"] {
+  font-size: 12px;
+  color: var(--text-dim);
+  border-style: dashed;
+}
+
+button {
+  font-family: "Share Tech Mono", monospace;
+  cursor: pointer;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  font-size: 11px;
+  background: rgba(232, 160, 32, 0.1);
+  border: 1px solid rgba(232, 160, 32, 0.35);
+  color: var(--accent);
+  padding: 9px 17px;
+  border-radius: 5px;
+  transition:
+    background 0.2s,
+    border-color 0.2s;
+}
+button:hover {
+  background: rgba(232, 160, 32, 0.2);
+  border-color: rgba(232, 160, 32, 0.6);
+}
+button:active {
+  transform: scale(0.97);
+}
+button:disabled {
+  opacity: 0.4;
+  cursor: default;
+  transform: none;
+}
+
+button.quiet {
+  background: rgba(96, 112, 160, 0.08);
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+button.quiet:hover {
+  background: rgba(96, 112, 160, 0.16);
+  border-color: var(--text-dim);
+  color: var(--text);
+}
+
+button.danger {
+  background: rgba(255, 96, 48, 0.08);
+  border-color: rgba(255, 96, 48, 0.3);
+  color: var(--danger);
+}
+button.danger:hover {
+  background: rgba(255, 96, 48, 0.18);
+  border-color: rgba(255, 96, 48, 0.6);
+}
+
+/* Messages */
+.msg-ok,
+.msg-err,
+.msg-warn {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 12px;
+  letter-spacing: 1px;
+  padding: 10px 14px;
+  border-radius: 5px;
+  margin: 14px 0;
+}
+.msg-ok {
+  color: var(--accent3);
+  background: rgba(48, 212, 160, 0.08);
+  border: 1px solid rgba(48, 212, 160, 0.3);
+}
+.msg-err {
+  color: var(--danger);
+  background: rgba(255, 96, 48, 0.08);
+  border: 1px solid rgba(255, 96, 48, 0.3);
+}
+.msg-warn {
+  color: var(--warn);
+  background: rgba(255, 176, 64, 0.08);
+  border: 1px solid rgba(255, 176, 64, 0.3);
+}
+
+/* Signature */
+.mrfox-sig {
+  text-align: center;
+  padding: 40px 0 10px;
+}
+.mrfox-sig::before {
+  content: "";
+  display: block;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(74, 106, 255, 0.3),
+    rgba(232, 160, 32, 0.3),
+    rgba(74, 106, 255, 0.3),
+    transparent
+  );
+  margin-bottom: 28px;
+}
+.mrfox-crafted {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  color: var(--text-dim);
+  margin-bottom: 8px;
+}
+.mrfox-name {
+  font-family: "Cinzel Decorative", serif;
+  font-size: clamp(26px, 6vw, 42px);
+  background: linear-gradient(
+    135deg,
+    #c0a060 0%,
+    #ffd080 40%,
+    #e8a020 60%,
+    #ff8040 100%
+  );
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  filter: drop-shadow(0 0 18px rgba(232, 160, 32, 0.45));
+  letter-spacing: 4px;
+  display: inline-block;
+}
+.mrfox-name::before,
+.mrfox-name::after {
+  content: "🦊";
+  font-size: 0.6em;
+  -webkit-text-fill-color: initial;
+  filter: none;
+  vertical-align: middle;
+  display: inline-block;
+  animation: fox-idle 4s ease-in-out infinite;
+}
+.mrfox-name::before {
+  margin-right: 10px;
+}
+.mrfox-name::after {
+  margin-left: 10px;
+  animation-direction: reverse;
+}
+@keyframes fox-idle {
+  0%,
+  100% {
+    transform: translateY(0) rotate(-5deg);
+  }
+  50% {
+    transform: translateY(-4px) rotate(5deg);
+  }
+}
+.mrfox-title {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 10px;
+  letter-spacing: 3px;
+  color: var(--text-dim);
+  margin-top: 6px;
+  opacity: 0.6;
+}
+
+@media (max-width: 560px) {
+  table.data td,
+  table.data th {
+    padding: 9px 10px;
+    font-size: 14px;
+  }
+  .topnav {
+    gap: 2px;
+  }
+}
