@@ -146,7 +146,7 @@ export default async function RankingsPage({ searchParams }) {
               color: d === days ? "var(--accent)" : "var(--text-dim)",
             }}
           >
-            {d} days
+            {d / 7} weeks
           </Link>
         ))}
       </div>
