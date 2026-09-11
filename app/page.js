@@ -76,6 +76,7 @@ export default async function Home() {
               COUNT(*) FILTER (WHERE s.value > 0)::int AS participants
        FROM events e
        LEFT JOIN scores s ON s.event_id = e.id AND s.measure = e.event_type
+       WHERE e.event_type IN ('frankie', 'zombies', 'war')
        GROUP BY e.id
        ORDER BY e.event_date DESC, e.id DESC
        LIMIT 1`,
