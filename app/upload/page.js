@@ -4,16 +4,37 @@ import { useState } from "react";
 import { saveAttendance, addPlayerByName } from "./actions";
 
 const THRESHOLD = 0.7;
+const ROSTER_TYPES = ["zombies", "war"];
+
+const DEFAULT_DURATION = { zombies: 30, war: 120 };
+
+const LABELS = { frankie: "Frankie", zombies: "Zombies", war: "War Event" };
 
 export default function UploadPage() {
   const [eventType, setEventType] = useState("frankie");
   const [eventDate, setEventDate] = useState("");
+  const [duration, setDuration] = useState(30);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [data, setData] = useState(null);
   const [choices, setChoices] = useState({});
   const [renameFlags, setRenameFlags] = useState({});
   const [message, setMessage] = useState("");
+
+  const usesRoster = ROSTER_TYPES.includes(eventType);
+
+  function changeType(value) {
+    setEventType(value);
+    if (DEFAULT_DURATION[value]) setDuration(DEFAULT_DURATION[value]);
+    setData(null);
+    setMessage("");
+  }
+
+  function qualifies(row) {
+    if (!data?.usesRoster) return true;
+    if (row.status === null) return false;
+    return row.status <= duration;
+  }
 
   async function handleExtract(e) {
     e.preventDefault();
@@ -23,6 +44,7 @@ export default function UploadPage() {
     setMessage("");
 
     const formData = new FormData(e.target);
+    formData.set("event_type", eventType);
 
     try {
       const res = await fetch("/api/extract", {
@@ -39,7 +61,14 @@ export default function UploadPage() {
         const initial = {};
         result.rows.forEach((row, i) => {
           const best = row.candidates[0];
-          initial[i] = best && best.score >= THRESHOLD ? String(best.id) : "";
+          const withinTime =
+            !result.usesRoster ||
+            (row.status !== null && row.status <= duration);
+
+          initial[i] =
+            best && best.score >= THRESHOLD && withinTime
+              ? String(best.id)
+              : "";
         });
         setChoices(initial);
         setRenameFlags({});
@@ -71,13 +100,10 @@ export default function UploadPage() {
       if (renameFlags[i]) renames.push({ id, name: row.extracted });
     });
 
-    const unresolved = data.rows.filter((_, i) => !choices[i]).length;
-
     const ok = window.confirm(
       `${presentIds.length + newNames.length} players marked present.\n` +
         (newNames.length ? `${newNames.length} added as new players.\n` : "") +
         (renames.length ? `${renames.length} renamed.\n` : "") +
-        (unresolved ? `${unresolved} rows skipped.\n` : "") +
         `\nSave this event?`,
     );
 
@@ -107,10 +133,9 @@ export default function UploadPage() {
     }
 
     const total = result.present + result.absent;
-    const label = eventType === "frankie" ? "Frankie" : "Zombies";
 
     setMessage(
-      `${label} — ${eventDate}. ${total} players updated, ` +
+      `${LABELS[eventType]} — ${eventDate}. ${total} players updated, ` +
         `${result.present} marked as attending, ${result.absent} marked as absent.`,
     );
 
@@ -120,16 +145,23 @@ export default function UploadPage() {
     setEventDate("");
   }
 
-  const matched = data
-    ? data.rows.filter((r) => r.candidates[0]?.score >= THRESHOLD).length
-    : 0;
+  function statusLabel(row) {
+    if (row.status === null) return "—";
+    if (row.status === 0) return "Online";
+    if (row.status < 60) return `${row.status}m`;
+    if (row.status < 1440) return `${Math.round(row.status / 60)}h`;
+    return `${Math.round(row.status / 1440)}d`;
+  }
+
+  const selected = data ? Object.values(choices).filter((c) => c).length : 0;
 
   return (
     <>
       <div className="page-title">Image Entry</div>
       <div className="page-sub">
-        Attendance events only — Frankie and Zombies. Everyone not found is
-        marked absent
+        {usesRoster
+          ? "Screenshot the member list as the event ends. Anyone inside the duration counts as present"
+          : "Screenshot the event ranking list. Anyone not found is marked absent"}
       </div>
 
       <form
@@ -142,20 +174,36 @@ export default function UploadPage() {
           marginBottom: "20px",
         }}
       >
-        <select
-          value={eventType}
-          onChange={(e) => setEventType(e.target.value)}
-        >
+        <select value={eventType} onChange={(e) => changeType(e.target.value)}>
           <option value="frankie">Frankie</option>
           <option value="zombies">Zombies</option>
+          <option value="war">War Event</option>
         </select>
+
         <input
           type="date"
           value={eventDate}
           onChange={(e) => setEventDate(e.target.value)}
           required
         />
+
+        {usesRoster && (
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <label className="mono">Event duration</label>
+            <input
+              type="number"
+              min="1"
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              style={{ width: "80px", textAlign: "right" }}
+              required
+            />
+            <span className="mono">minutes</span>
+          </span>
+        )}
+
         <input type="file" name="images" accept="image/*" multiple required />
+
         <button type="submit" disabled={busy}>
           {busy ? "Reading…" : "Extract"}
         </button>
@@ -168,7 +216,7 @@ export default function UploadPage() {
         <>
           <div className="section-label">
             {data.rows.length} names · {data.screenshots} screenshots ·{" "}
-            {matched} auto-matched
+            {selected} selected
             {data.duplicatesRemoved > 0
               ? ` · ${data.duplicatesRemoved} duplicates`
               : ""}
@@ -181,14 +229,19 @@ export default function UploadPage() {
             </div>
           )}
 
-          <div className="panel">
+          <div className="panel scroll-x">
             <table className="data">
               <thead>
                 <tr>
                   <th>Extracted</th>
+                  {data.usesRoster && (
+                    <th className="num" style={{ width: "90px" }}>
+                      Last seen
+                    </th>
+                  )}
                   <th style={{ width: "240px" }}>Assign to</th>
-                  <th style={{ width: "110px" }}>Rename</th>
-                  <th className="num" style={{ width: "90px" }}>
+                  <th style={{ width: "90px" }}>Rename</th>
+                  <th className="num" style={{ width: "80px" }}>
                     Match
                   </th>
                 </tr>
@@ -198,9 +251,10 @@ export default function UploadPage() {
                   const best = row.candidates[0];
                   const auto = best && best.score >= THRESHOLD;
                   const choice = choices[i];
+                  const inTime = qualifies(row);
 
                   return (
-                    <tr key={i}>
+                    <tr key={i} style={{ opacity: inTime ? 1 : 0.45 }}>
                       <td
                         style={{
                           fontFamily: "'Share Tech Mono', monospace",
@@ -209,6 +263,20 @@ export default function UploadPage() {
                       >
                         {row.extracted}
                       </td>
+
+                      {data.usesRoster && (
+                        <td
+                          className="num"
+                          style={{
+                            color: inTime
+                              ? "var(--accent3)"
+                              : "var(--text-dim)",
+                          }}
+                        >
+                          {statusLabel(row)}
+                        </td>
+                      )}
+
                       <td>
                         <select
                           style={{ width: "100%" }}
@@ -226,6 +294,7 @@ export default function UploadPage() {
                           ))}
                         </select>
                       </td>
+
                       <td>
                         {choice && choice !== "new" && (
                           <input
@@ -240,6 +309,7 @@ export default function UploadPage() {
                           />
                         )}
                       </td>
+
                       <td
                         className="num"
                         style={{
