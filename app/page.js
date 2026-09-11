@@ -1,5 +1,6 @@
 import Link from "next/link";
 import { query } from "../lib/db";
+import { windowBounds, iso } from "../lib/window";
 
 export const dynamic = "force-dynamic";
 
@@ -11,33 +12,6 @@ const TYPE_LABELS = {
   war: "War Event",
   contribution: "Contribution",
 };
-
-function windowBounds(weeks) {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const sinceMonday = day === 0 ? 6 : day - 1;
-
-  const thisMonday = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  thisMonday.setUTCDate(thisMonday.getUTCDate() - sinceMonday);
-
-  const start = new Date(thisMonday);
-  start.setUTCDate(start.getUTCDate() - weeks * 7);
-
-  const end = new Date(thisMonday);
-  end.setUTCDate(end.getUTCDate() - 1);
-
-  const lastWeekStart = new Date(thisMonday);
-  lastWeekStart.setUTCDate(lastWeekStart.getUTCDate() - 7);
-
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-    lastWeekStart: lastWeekStart.toISOString().slice(0, 10),
-    lastWeekEnd: end.toISOString().slice(0, 10),
-  };
-}
 
 function formatDate(d) {
   if (!d) return "—";
@@ -75,7 +49,8 @@ const statLabel = {
 const WEEKLY = ["vs", "war", "contribution"];
 
 export default async function Home() {
-  const { start, end, lastWeekStart, lastWeekEnd } = windowBounds(4);
+  const { start, end } = windowBounds(28);
+  const { start: weekStart } = windowBounds(7);
 
   let playerCount = 0;
   let lastEvent = null;
@@ -108,7 +83,7 @@ export default async function Home() {
        JOIN events e ON e.id = s.event_id
        WHERE e.event_date >= $1 AND e.event_date <= $2
        GROUP BY s.measure`,
-      [start, end],
+      [iso(start), iso(end)],
     );
 
     for (const r of rows) {
@@ -128,7 +103,7 @@ export default async function Home() {
        JOIN events e ON e.id = s.event_id
        WHERE e.event_date >= $1 AND e.event_date <= $2
        GROUP BY s.measure`,
-      [lastWeekStart, lastWeekEnd],
+      [iso(weekStart), iso(end)],
     );
 
     for (const r of weekRows) {
@@ -149,7 +124,7 @@ export default async function Home() {
        JOIN events e ON e.id = s.event_id
        WHERE e.event_date >= $1 AND e.event_date <= $2
        ORDER BY s.measure, e.event_date DESC`,
-      [start, end],
+      [iso(start), iso(end)],
     );
 
     for (const r of recentRows) {
@@ -172,13 +147,19 @@ export default async function Home() {
 
     const isValue = kind === "value";
 
-    const average = isValue
-      ? (s.total / s.events / playerCount).toFixed(1)
-      : String(Math.round(s.positives / s.events));
+    let average;
+    let averageSuffix;
 
-    const averageSuffix = isValue
-      ? "per player per week"
-      : `of ${playerCount} per event`;
+    if (measure === "vs") {
+      average = (s.total / playerCount / 4).toFixed(1);
+      averageSuffix = "per player per week";
+    } else if (isValue) {
+      average = (s.total / s.events / playerCount).toFixed(1);
+      averageSuffix = "per player per week";
+    } else {
+      average = String(Math.round(s.positives / s.events));
+      averageSuffix = `of ${playerCount} per event`;
+    }
 
     let lowerValue = null;
     let lowerLabel = null;
@@ -186,13 +167,19 @@ export default async function Home() {
 
     if (WEEKLY.includes(measure)) {
       const w = lastWeek[measure];
-      lowerLabel = "Last week";
+      lowerLabel = "Last 7 days";
 
       if (w && w.events > 0) {
-        lowerValue = isValue
-          ? (w.total / w.events / playerCount).toFixed(1)
-          : String(Math.round(w.positives / w.events));
-        lowerSuffix = isValue ? "per player" : `of ${playerCount}`;
+        if (measure === "vs") {
+          lowerValue = (w.total / playerCount).toFixed(1);
+          lowerSuffix = "per player";
+        } else if (isValue) {
+          lowerValue = (w.total / w.events / playerCount).toFixed(1);
+          lowerSuffix = "per player";
+        } else {
+          lowerValue = String(Math.round(w.positives / w.events));
+          lowerSuffix = `of ${playerCount}`;
+        }
       }
     } else {
       const r = mostRecent[measure];
@@ -367,7 +354,7 @@ export default async function Home() {
         </div>
       </div>
 
-      <div className="section-label">Four week averages</div>
+      <div className="section-label">Last 28 days</div>
 
       <div className="stat-row two">
         {topRow.map((c) => (
@@ -432,7 +419,7 @@ function StatCard({
             className="mono"
             style={{ marginTop: "4px", letterSpacing: "1px", lineHeight: 1.5 }}
           >
-            No data in last 4 weeks
+            No data in last 28 days
             <br />
             please upload
           </div>
@@ -473,7 +460,7 @@ function StatCard({
               >
                 No data present
                 <br />
-                for last week
+                for last 7 days
               </div>
             ) : (
               <>

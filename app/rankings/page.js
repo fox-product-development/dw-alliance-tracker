@@ -1,38 +1,10 @@
 import Link from "next/link";
 import { query } from "../../lib/db";
+import { windowBounds, iso, pretty } from "../../lib/window";
 
 export const dynamic = "force-dynamic";
 
-function windowStart(weeks) {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const sinceMonday = day === 0 ? 6 : day - 1;
-
-  const thisMonday = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  thisMonday.setUTCDate(thisMonday.getUTCDate() - sinceMonday);
-
-  const start = new Date(thisMonday);
-  start.setUTCDate(start.getUTCDate() - weeks * 7);
-
-  const end = new Date(thisMonday);
-  end.setUTCDate(end.getUTCDate() - 1);
-
-  return { start, end };
-}
-
-function iso(d) {
-  return d.toISOString().slice(0, 10);
-}
-
-function pretty(d) {
-  return d.toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
-}
+const PRESETS = [28, 56, 84];
 
 function convertVs(avg, settings) {
   const floor = settings.vs_floor;
@@ -69,17 +41,18 @@ const WEIGHT_KEYS = {
   poll_response: "weight_poll",
   frankie: "weight_frankie",
   zombies: "weight_zombies",
+  war: "weight_war",
   car_cp: "weight_car_cp",
   contribution: "weight_contribution",
 };
 
 export default async function RankingsPage({ searchParams }) {
   const params = await searchParams;
-  const weeks = [4, 8, 12].includes(Number(params?.weeks))
-    ? Number(params.weeks)
-    : 4;
+  const days = PRESETS.includes(Number(params?.days))
+    ? Number(params.days)
+    : 28;
 
-  const { start, end } = windowStart(weeks);
+  const { start, end } = windowBounds(days);
 
   const settingRows = await query("SELECT key, value FROM settings");
   const settings = {};
@@ -156,24 +129,24 @@ export default async function RankingsPage({ searchParams }) {
       </div>
 
       <div style={{ display: "flex", gap: "6px", marginBottom: "20px" }}>
-        {[4, 8, 12].map((w) => (
+        {PRESETS.map((d) => (
           <Link
-            key={w}
-            href={`/rankings?weeks=${w}`}
+            key={d}
+            href={`/rankings?days=${d}`}
             className="mono"
             style={{
               padding: "8px 16px",
               borderRadius: "5px",
               border:
-                w === weeks
+                d === days
                   ? "1px solid rgba(232,160,32,0.35)"
                   : "1px solid var(--border)",
               background:
-                w === weeks ? "rgba(232,160,32,0.1)" : "rgba(96,112,160,0.05)",
-              color: w === weeks ? "var(--accent)" : "var(--text-dim)",
+                d === days ? "rgba(232,160,32,0.1)" : "rgba(96,112,160,0.05)",
+              color: d === days ? "var(--accent)" : "var(--text-dim)",
             }}
           >
-            {w} weeks
+            {d} days
           </Link>
         ))}
       </div>
@@ -188,6 +161,7 @@ export default async function RankingsPage({ searchParams }) {
               <th className="num">Poll</th>
               <th className="num">Frankie</th>
               <th className="num">Zombies</th>
+              <th className="num">War</th>
               <th className="num">Car</th>
               <th className="num">Score</th>
             </tr>
@@ -205,7 +179,7 @@ export default async function RankingsPage({ searchParams }) {
 
                 {p.score === null ? (
                   <td
-                    colSpan={6}
+                    colSpan={7}
                     className="mono"
                     style={{ textAlign: "right" }}
                   >
@@ -219,6 +193,7 @@ export default async function RankingsPage({ searchParams }) {
                     <td className="num">{rate(p.detail.poll_response)}</td>
                     <td className="num">{rate(p.detail.frankie)}</td>
                     <td className="num">{rate(p.detail.zombies)}</td>
+                    <td className="num">{rate(p.detail.war)}</td>
                     <td className="num">
                       {p.detail.car_cp ? p.detail.car_cp.avg.toFixed(1) : "—"}
                     </td>
