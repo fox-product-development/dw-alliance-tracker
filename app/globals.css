@@ -551,3 +551,24 @@ table.data th.lock-2 {
   gap: 10px;
   justify-content: flex-end;
 }
+/* Stat card rows — 2 up then 3 up on desktop, stacked on mobile */
+.stat-row {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.stat-row.two {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.stat-row.three {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+@media (max-width: 640px) {
+  .stat-row.two,
+  .stat-row.three {
+    grid-template-columns: 1fr;
+  }
+}
