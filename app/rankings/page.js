@@ -178,12 +178,12 @@ export default async function RankingsPage({ searchParams }) {
         ))}
       </div>
 
-      <div className="panel">
+      <div className="panel scroll-x">
         <table className="data">
           <thead>
             <tr>
-              <th style={{ width: "50px" }}>#</th>
-              <th>Player</th>
+              <th className="lock-1">#</th>
+              <th className="lock-2">Player</th>
               <th className="num">VS avg</th>
               <th className="num">Poll</th>
               <th className="num">Frankie</th>
@@ -196,12 +196,12 @@ export default async function RankingsPage({ searchParams }) {
             {ranked.map((p, i) => (
               <tr key={p.id}>
                 <td
-                  className="num dim"
+                  className="lock-1 num dim"
                   style={{ textAlign: "left", paddingRight: 0 }}
                 >
                   {p.score === null ? "" : i + 1}
                 </td>
-                <td>{p.name}</td>
+                <td className="lock-2">{p.name}</td>
 
                 {p.score === null ? (
                   <td

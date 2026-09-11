@@ -14,7 +14,7 @@ const LINKS = [
 export default function Nav() {
   const pathname = usePathname();
 
-  if (pathname === "/") return null;
+  if (pathname === "/" || pathname === "/login") return null;
 
   return (
     <nav className="topnav">

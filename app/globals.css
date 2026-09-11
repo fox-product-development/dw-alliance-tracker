@@ -433,7 +433,42 @@ button.danger:hover {
   margin-top: 6px;
   opacity: 0.6;
 }
+/* Horizontally scrollable table with locked leading columns */
+.scroll-x {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
 
+.scroll-x table.data {
+  min-width: 700px;
+}
+
+table.data td.lock-1,
+table.data th.lock-1,
+table.data td.lock-2,
+table.data th.lock-2 {
+  position: sticky;
+  background: var(--bg-panel);
+  z-index: 2;
+}
+
+table.data th.lock-1,
+table.data th.lock-2 {
+  background: #0d1018;
+  z-index: 3;
+}
+
+table.data td.lock-1,
+table.data th.lock-1 {
+  left: 0;
+  width: 46px;
+}
+
+table.data td.lock-2,
+table.data th.lock-2 {
+  left: 46px;
+  box-shadow: 1px 0 0 var(--border);
+}
 @media (max-width: 560px) {
   table.data td,
   table.data th {
