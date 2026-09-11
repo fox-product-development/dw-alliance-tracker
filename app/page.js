@@ -16,6 +16,15 @@ const TYPE_LABELS = {
 function formatDate(d) {
   if (!d) return "—";
   return new Date(d).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "2-digit",
+  });
+}
+
+function formatShort(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
   });
@@ -50,12 +59,11 @@ const WEEKLY = ["vs", "war", "contribution"];
 
 export default async function Home() {
   const { start, end } = windowBounds(28);
-  const { start: weekStart } = windowBounds(7);
 
   let playerCount = 0;
   let lastEvent = null;
   const stats = {};
-  const lastWeek = {};
+  const lastSeven = {};
   const mostRecent = {};
   let error = null;
 
@@ -94,20 +102,30 @@ export default async function Home() {
       };
     }
 
-    const weekRows = await query(
-      `SELECT s.measure,
+    const sevenRows = await query(
+      `WITH last_dates AS (
+         SELECT s.measure, MAX(e.event_date) AS last_date
+         FROM scores s
+         JOIN events e ON e.id = s.event_id
+         WHERE e.event_date >= $1 AND e.event_date <= $2
+         GROUP BY s.measure
+       )
+       SELECT s.measure, ld.last_date,
               COUNT(DISTINCT e.id)::int AS events,
               SUM(s.value) AS total,
               COUNT(*) FILTER (WHERE s.value > 0)::int AS positives
        FROM scores s
        JOIN events e ON e.id = s.event_id
-       WHERE e.event_date >= $1 AND e.event_date <= $2
-       GROUP BY s.measure`,
-      [iso(weekStart), iso(end)],
+       JOIN last_dates ld ON ld.measure = s.measure
+       WHERE e.event_date > ld.last_date - 7
+         AND e.event_date <= ld.last_date
+       GROUP BY s.measure, ld.last_date`,
+      [iso(start), iso(end)],
     );
 
-    for (const r of weekRows) {
-      lastWeek[r.measure] = {
+    for (const r of sevenRows) {
+      lastSeven[r.measure] = {
+        lastDate: r.last_date,
         events: r.events,
         total: Number(r.total),
         positives: r.positives,
@@ -152,42 +170,33 @@ export default async function Home() {
 
     if (measure === "vs") {
       average = (s.total / playerCount / 4).toFixed(1);
-      averageSuffix = "per player per week";
+      averageSuffix = "average weekly score over 4 weeks";
     } else if (isValue) {
       average = (s.total / s.events / playerCount).toFixed(1);
-      averageSuffix = "per player per week";
+      averageSuffix = "average weekly score over 4 weeks";
     } else {
       average = String(Math.round(s.positives / s.events));
-      averageSuffix = `of ${playerCount} per event`;
+      averageSuffix = `of ${playerCount} per event, over 4 weeks`;
     }
 
     let lowerValue = null;
-    let lowerLabel = null;
     let lowerSuffix = null;
 
     if (WEEKLY.includes(measure)) {
-      const w = lastWeek[measure];
-      lowerLabel = "Last 7 days";
+      const w = lastSeven[measure];
 
       if (w && w.events > 0) {
-        if (measure === "vs") {
-          lowerValue = (w.total / playerCount).toFixed(1);
-          lowerSuffix = "per player";
-        } else if (isValue) {
-          lowerValue = (w.total / w.events / playerCount).toFixed(1);
-          lowerSuffix = "per player";
-        } else {
-          lowerValue = String(Math.round(w.positives / w.events));
-          lowerSuffix = `of ${playerCount}`;
-        }
+        lowerValue = isValue
+          ? (w.total / playerCount).toFixed(1)
+          : String(Math.round(w.positives / w.events));
+        lowerSuffix = `average for last 7 days from ${formatDate(w.lastDate)}`;
       }
     } else {
       const r = mostRecent[measure];
-      lowerLabel = "Most recent";
 
       if (r) {
         lowerValue = String(r.positives);
-        lowerSuffix = `of ${playerCount} · ${formatDate(r.date)}`;
+        lowerSuffix = `of ${playerCount} on ${formatShort(r.date)}`;
       }
     }
 
@@ -196,7 +205,6 @@ export default async function Home() {
       colour,
       average,
       averageSuffix,
-      lowerLabel,
       lowerValue,
       lowerSuffix,
     };
@@ -312,7 +320,7 @@ export default async function Home() {
                 className="mono"
                 style={{ marginTop: "4px", letterSpacing: "1px" }}
               >
-                {formatDate(lastEvent.event_date)} · {lastEvent.participants}{" "}
+                {formatShort(lastEvent.event_date)} · {lastEvent.participants}{" "}
                 participants
               </div>
             </>
@@ -393,7 +401,6 @@ function StatCard({
   empty,
   average,
   averageSuffix,
-  lowerLabel,
   lowerValue,
   lowerSuffix,
 }) {
@@ -437,7 +444,7 @@ function StatCard({
           </div>
           <div
             className="mono"
-            style={{ marginTop: "4px", letterSpacing: "1px" }}
+            style={{ marginTop: "4px", letterSpacing: "1px", lineHeight: 1.5 }}
           >
             {averageSuffix}
           </div>
@@ -449,18 +456,9 @@ function StatCard({
               borderTop: "1px solid var(--border)",
             }}
           >
-            <div style={{ ...statLabel, marginBottom: "6px" }}>
-              {lowerLabel}
-            </div>
-
             {lowerValue === null ? (
-              <div
-                className="mono"
-                style={{ letterSpacing: "1px", lineHeight: 1.5 }}
-              >
-                No data present
-                <br />
-                for last 7 days
+              <div className="mono" style={{ letterSpacing: "1px" }}>
+                No recent data
               </div>
             ) : (
               <>
@@ -475,7 +473,11 @@ function StatCard({
                 </div>
                 <div
                   className="mono"
-                  style={{ marginTop: "4px", letterSpacing: "1px" }}
+                  style={{
+                    marginTop: "4px",
+                    letterSpacing: "1px",
+                    lineHeight: 1.5,
+                  }}
                 >
                   {lowerSuffix}
                 </div>
