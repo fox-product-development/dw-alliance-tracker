@@ -8,6 +8,7 @@ const LABELS = {
   weight_poll: "Poll response",
   weight_frankie: "Frankie",
   weight_zombies: "Zombies",
+  weight_war: "War",
   weight_car_cp: "Car CP",
   weight_contribution: "Contribution",
   vs_floor: "VS floor",
@@ -18,7 +19,7 @@ const LABELS = {
 
 const NOTES = {
   vs_floor:
-    "The weekly VS score expected of everyone. Scores here convert to 0.5",
+    "The daily VS score expected of everyone. Scores here convert to 0.5",
   vs_cap: "Scores above this stop earning more",
   vs_curve_exponent:
     "How hard falling below the floor bites. Higher is harsher",
@@ -30,6 +31,7 @@ const WEIGHT_ORDER = [
   "weight_poll",
   "weight_frankie",
   "weight_zombies",
+  "weight_war",
   "weight_car_cp",
   "weight_contribution",
 ];
@@ -41,7 +43,16 @@ const PARAM_ORDER = [
   "contribution_cap",
 ];
 
-function Section({ title, keys, values, showNotes }) {
+const CAR_ORDER = [
+  "car_range_1",
+  "car_range_2",
+  "car_range_3",
+  "car_range_4",
+  "car_range_5",
+  "car_range_6",
+];
+
+function NumberSection({ title, keys, values, showNotes }) {
   return (
     <>
       <div className="section-label" style={{ marginTop: "26px" }}>
@@ -82,10 +93,15 @@ function Section({ title, keys, values, showNotes }) {
 }
 
 export default async function SettingsPage() {
-  const rows = await query("SELECT key, value FROM settings");
+  const rows = await query("SELECT key, value, text_value FROM settings");
 
   const values = {};
-  for (const r of rows) values[r.key] = Number(r.value);
+  const texts = {};
+
+  for (const r of rows) {
+    values[r.key] = Number(r.value);
+    texts[r.key] = r.text_value;
+  }
 
   const weightTotal = WEIGHT_ORDER.reduce(
     (sum, k) => sum + (values[k] || 0),
@@ -101,13 +117,38 @@ export default async function SettingsPage() {
       </div>
 
       <form action={saveSettings}>
-        <Section title="Weights" keys={WEIGHT_ORDER} values={values} />
-        <Section
+        <NumberSection title="Weights" keys={WEIGHT_ORDER} values={values} />
+        <NumberSection
           title="Scoring parameters"
           keys={PARAM_ORDER}
           values={values}
           showNotes
         />
+
+        <div className="section-label" style={{ marginTop: "26px" }}>
+          Car CP ranges
+        </div>
+        <div className="panel">
+          <table className="data">
+            <tbody>
+              {CAR_ORDER.map((k, i) => (
+                <tr key={k}>
+                  <td style={{ width: "70px" }} className="dim">
+                    {i + 1}
+                  </td>
+                  <td>
+                    <input
+                      name={k}
+                      type="text"
+                      defaultValue={texts[k] || ""}
+                      style={{ width: "100%", maxWidth: "260px" }}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         <p style={{ marginTop: "24px" }}>
           <button type="submit">Save settings</button>

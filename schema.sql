@@ -25,8 +25,9 @@ CREATE INDEX IF NOT EXISTS idx_scores_player ON scores (player_id);
 CREATE INDEX IF NOT EXISTS idx_scores_event ON scores (event_id);
 
 CREATE TABLE IF NOT EXISTS settings (
-  key    TEXT PRIMARY KEY,
-  value  NUMERIC NOT NULL
+  key         TEXT PRIMARY KEY,
+  value       NUMERIC NOT NULL,
+  text_value  TEXT
 );
 
 INSERT INTO settings (key, value) VALUES
@@ -37,8 +38,17 @@ INSERT INTO settings (key, value) VALUES
   ('weight_car_cp',       0.12),
   ('weight_contribution', 0.04),
   ('weight_war',          0),
-  ('vs_floor',            10),
-  ('vs_cap',              40),
+  ('vs_floor',            2),
+  ('vs_cap',              10),
   ('vs_curve_exponent',   1.5),
   ('contribution_cap',    100)
+ON CONFLICT (key) DO NOTHING;
+
+INSERT INTO settings (key, value, text_value) VALUES
+  ('car_range_1', 0, '1G+'),
+  ('car_range_2', 0, '800m-1G'),
+  ('car_range_3', 0, '500-600'),
+  ('car_range_4', 0, '400-500'),
+  ('car_range_5', 0, '200-400'),
+  ('car_range_6', 0, '<200')
 ON CONFLICT (key) DO NOTHING;

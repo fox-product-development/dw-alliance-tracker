@@ -6,6 +6,15 @@ export const dynamic = "force-dynamic";
 
 const PRESETS = [28, 56, 84];
 
+const CAR_ORDER = [
+  "car_range_1",
+  "car_range_2",
+  "car_range_3",
+  "car_range_4",
+  "car_range_5",
+  "car_range_6",
+];
+
 function convertVs(avg, settings) {
   const floor = settings.vs_floor;
   const cap = settings.vs_cap;
@@ -17,14 +26,16 @@ function convertVs(avg, settings) {
   return 0.5 * Math.pow(avg / floor, exp);
 }
 
-function convert(measure, values, settings) {
-  const sum = values.reduce((a, b) => a + b, 0);
-  const avg = sum / values.length;
+function convert(measure, entry, settings) {
+  if (measure === "car_cp") {
+    return Math.max(0, 1 - (entry.latest - 1) * 0.16);
+  }
+
+  const avg = entry.avg;
 
   if (measure === "vs") return convertVs(avg, settings);
   if (measure === "contribution")
     return Math.min(avg, settings.contribution_cap) / settings.contribution_cap;
-  if (measure === "car_cp") return Math.max(0, 1 - (avg - 1) * 0.16);
   return avg;
 }
 
@@ -54,17 +65,24 @@ export default async function RankingsPage({ searchParams }) {
 
   const { start, end } = windowBounds(days);
 
-  const settingRows = await query("SELECT key, value FROM settings");
+  const settingRows = await query(
+    "SELECT key, value, text_value FROM settings",
+  );
   const settings = {};
-  for (const r of settingRows) settings[r.key] = Number(r.value);
+  const texts = {};
+  for (const r of settingRows) {
+    settings[r.key] = Number(r.value);
+    texts[r.key] = r.text_value;
+  }
 
   const players = await query("SELECT id, name FROM players ORDER BY name ASC");
 
   const rows = await query(
-    `SELECT s.player_id, s.measure, s.value
+    `SELECT s.player_id, s.measure, s.value, e.event_date
      FROM scores s
      JOIN events e ON e.id = s.event_id
-     WHERE e.event_date >= $1 AND e.event_date <= $2`,
+     WHERE e.event_date >= $1 AND e.event_date <= $2
+     ORDER BY e.event_date ASC, e.id ASC`,
     [iso(start), iso(end)],
   );
 
@@ -91,11 +109,17 @@ export default async function RankingsPage({ searchParams }) {
       const weight = settings[WEIGHT_KEYS[measure]];
       if (!weight) continue;
 
-      weighted += convert(measure, values, settings) * weight;
+      const sum = values.reduce((a, b) => a + b, 0);
+      const entry = {
+        avg: sum / values.length,
+        latest: values[values.length - 1],
+        count: values.length,
+      };
+
+      weighted += convert(measure, entry, settings) * weight;
       activeWeight += weight;
 
-      const sum = values.reduce((a, b) => a + b, 0);
-      detail[measure] = { avg: sum / values.length, count: values.length };
+      detail[measure] = entry;
     }
 
     const score = activeWeight > 0 ? (weighted / activeWeight) * 10 : null;
@@ -128,27 +152,72 @@ export default async function RankingsPage({ searchParams }) {
         {average !== null && ` · alliance average ${average.toFixed(1)}`}
       </div>
 
-      <div style={{ display: "flex", gap: "6px", marginBottom: "20px" }}>
-        {PRESETS.map((d) => (
-          <Link
-            key={d}
-            href={`/rankings?days=${d}`}
+      <div
+        style={{
+          display: "flex",
+          gap: "16px",
+          marginBottom: "20px",
+          flexWrap: "wrap",
+          alignItems: "flex-start",
+          justifyContent: "space-between",
+        }}
+      >
+        <div style={{ display: "flex", gap: "6px" }}>
+          {PRESETS.map((d) => (
+            <Link
+              key={d}
+              href={`/rankings?days=${d}`}
+              className="mono"
+              style={{
+                padding: "8px 16px",
+                borderRadius: "5px",
+                border:
+                  d === days
+                    ? "1px solid rgba(232,160,32,0.35)"
+                    : "1px solid var(--border)",
+                background:
+                  d === days ? "rgba(232,160,32,0.1)" : "rgba(96,112,160,0.05)",
+                color: d === days ? "var(--accent)" : "var(--text-dim)",
+              }}
+            >
+              {d / 7} weeks
+            </Link>
+          ))}
+        </div>
+
+        <div
+          style={{
+            border: "1px solid var(--border)",
+            borderRadius: "5px",
+            padding: "10px 14px",
+            background: "rgba(0,0,0,0.2)",
+          }}
+        >
+          <div
             className="mono"
+            style={{ marginBottom: "6px", letterSpacing: "2px" }}
+          >
+            Car CP ranges
+          </div>
+          <div
             style={{
-              padding: "8px 16px",
-              borderRadius: "5px",
-              border:
-                d === days
-                  ? "1px solid rgba(232,160,32,0.35)"
-                  : "1px solid var(--border)",
-              background:
-                d === days ? "rgba(232,160,32,0.1)" : "rgba(96,112,160,0.05)",
-              color: d === days ? "var(--accent)" : "var(--text-dim)",
+              display: "grid",
+              gridTemplateColumns: "repeat(3, auto)",
+              gap: "3px 14px",
             }}
           >
-            {d / 7} weeks
-          </Link>
-        ))}
+            {CAR_ORDER.map((k, i) => (
+              <span
+                key={k}
+                className="mono"
+                style={{ letterSpacing: "1px", textTransform: "none" }}
+              >
+                <span style={{ color: "var(--accent)" }}>{i + 1}</span>{" "}
+                {texts[k] || "—"}
+              </span>
+            ))}
+          </div>
+        </div>
       </div>
 
       <div className="panel scroll-x">
@@ -195,7 +264,7 @@ export default async function RankingsPage({ searchParams }) {
                     <td className="num">{rate(p.detail.zombies)}</td>
                     <td className="num">{rate(p.detail.war)}</td>
                     <td className="num">
-                      {p.detail.car_cp ? p.detail.car_cp.avg.toFixed(1) : "—"}
+                      {p.detail.car_cp ? p.detail.car_cp.latest : "—"}
                     </td>
                     <td
                       className="num"
