@@ -8,6 +8,7 @@ const TYPE_LABELS = {
   poll: "Poll",
   frankie: "Frankie",
   zombies: "Zombies",
+  war: "War Event",
   contribution: "Contribution",
 };
 
@@ -38,7 +39,6 @@ function formatDate(d) {
   return new Date(d).toLocaleDateString("en-GB", {
     day: "numeric",
     month: "short",
-    year: "numeric",
   });
 }
 
@@ -74,7 +74,8 @@ export default async function Home() {
 
   let playerCount = 0;
   let lastEvent = null;
-  let stats = {};
+  const stats = {};
+  const latest = {};
   let error = null;
 
   try {
@@ -111,26 +112,78 @@ export default async function Home() {
         positives: r.positives,
       };
     }
+
+    const latestRows = await query(
+      `SELECT DISTINCT ON (s.measure)
+              s.measure, e.event_date,
+              SUM(s.value) OVER (PARTITION BY s.event_id, s.measure) AS total,
+              COUNT(*) FILTER (WHERE s.value > 0)
+                OVER (PARTITION BY s.event_id, s.measure)::int AS positives
+       FROM scores s
+       JOIN events e ON e.id = s.event_id
+       WHERE e.event_date >= $1 AND e.event_date <= $2
+       ORDER BY s.measure, e.event_date DESC`,
+      [start, end],
+    );
+
+    for (const r of latestRows) {
+      latest[r.measure] = {
+        date: r.event_date,
+        total: Number(r.total),
+        positives: r.positives,
+      };
+    }
   } catch (err) {
     error = err.message;
   }
 
-  function attendance(measure) {
+  function attendanceCard(measure, label, colour) {
     const s = stats[measure];
-    if (!s || s.events === 0) return null;
-    return Math.round(s.positives / s.events);
+    const l = latest[measure];
+
+    if (!s || s.events === 0) {
+      return { label, colour, empty: true };
+    }
+
+    return {
+      label,
+      colour,
+      value: String(Math.round(s.positives / s.events)),
+      suffix: `of ${playerCount} per event`,
+      last: l ? `Last ${formatDate(l.date)} · ${l.positives}` : null,
+    };
   }
 
-  function perPlayer(measure) {
+  function valueCard(measure, label, colour) {
     const s = stats[measure];
-    if (!s || s.events === 0 || playerCount === 0) return null;
-    return s.total / s.events / playerCount;
+    const l = latest[measure];
+
+    if (!s || s.events === 0 || playerCount === 0) {
+      return { label, colour, empty: true };
+    }
+
+    const avg = s.total / s.events / playerCount;
+    const lastAvg = l ? l.total / playerCount : null;
+
+    return {
+      label,
+      colour,
+      value: avg.toFixed(1),
+      suffix: "per player per week",
+      last:
+        lastAvg !== null
+          ? `Last ${formatDate(l.date)} · ${lastAvg.toFixed(1)}`
+          : null,
+    };
   }
 
-  const frankie = attendance("frankie");
-  const zombies = attendance("zombies");
-  const vs = perPlayer("vs");
-  const contribution = perPlayer("contribution");
+  const cards = [
+    valueCard("vs", "VS score", "#60c0ff"),
+    attendanceCard("frankie", "Frankie attendance", "#ff7060"),
+    attendanceCard("zombies", "Zombies attendance", "#80ff90"),
+    attendanceCard("war", "War attendance", "#ffd060"),
+    valueCard("contribution", "Contribution", "#c080ff"),
+  ];
 
   return (
     <>
@@ -165,17 +218,7 @@ export default async function Home() {
         />
       </header>
 
-      {error && (
-        <p
-          style={{
-            color: "var(--danger)",
-            fontFamily: "'Share Tech Mono', monospace",
-            fontSize: "12px",
-          }}
-        >
-          Database error: {error}
-        </p>
-      )}
+      {error && <div className="msg-err">Database error: {error}</div>}
 
       <div className="section-label">Overview</div>
 
@@ -311,30 +354,9 @@ export default async function Home() {
           gap: "12px",
         }}
       >
-        <StatCard
-          label="Frankie attendance"
-          value={frankie === null ? "—" : `${frankie}`}
-          suffix={frankie === null ? "no data" : `of ${playerCount} per event`}
-          colour="#ff7060"
-        />
-        <StatCard
-          label="Zombies attendance"
-          value={zombies === null ? "—" : `${zombies}`}
-          suffix={zombies === null ? "no data" : `of ${playerCount} per event`}
-          colour="#80ff90"
-        />
-        <StatCard
-          label="VS score"
-          value={vs === null ? "—" : vs.toFixed(1)}
-          suffix={vs === null ? "no data" : "per player per week"}
-          colour="#60c0ff"
-        />
-        <StatCard
-          label="Contribution"
-          value={contribution === null ? "—" : contribution.toFixed(1)}
-          suffix={contribution === null ? "no data" : "per player per week"}
-          colour="#c080ff"
-        />
+        {cards.map((c) => (
+          <StatCard key={c.label} {...c} />
+        ))}
       </div>
 
       <p style={{ marginTop: "24px", textAlign: "center" }}>
@@ -356,7 +378,7 @@ export default async function Home() {
   );
 }
 
-function StatCard({ label, value, suffix, colour }) {
+function StatCard({ label, value, suffix, last, colour, empty }) {
   return (
     <div style={card}>
       <div
@@ -371,18 +393,59 @@ function StatCard({ label, value, suffix, colour }) {
         }}
       />
       <div style={statLabel}>{label}</div>
-      <div
-        style={{
-          ...statValue,
-          color: colour,
-          textShadow: `0 0 10px ${colour}44`,
-        }}
-      >
-        {value}
-      </div>
-      <div className="mono" style={{ marginTop: "4px", letterSpacing: "1px" }}>
-        {suffix}
-      </div>
+
+      {empty ? (
+        <>
+          <div
+            style={{
+              ...statValue,
+              color: "var(--text-dim)",
+              textShadow: "none",
+            }}
+          >
+            —
+          </div>
+          <div
+            className="mono"
+            style={{ marginTop: "4px", letterSpacing: "1px", lineHeight: 1.5 }}
+          >
+            No data in last 4 weeks
+            <br />
+            please upload
+          </div>
+        </>
+      ) : (
+        <>
+          <div
+            style={{
+              ...statValue,
+              color: colour,
+              textShadow: `0 0 10px ${colour}44`,
+            }}
+          >
+            {value}
+          </div>
+          <div
+            className="mono"
+            style={{ marginTop: "4px", letterSpacing: "1px" }}
+          >
+            {suffix}
+          </div>
+          {last && (
+            <div
+              style={{
+                marginTop: "10px",
+                paddingTop: "8px",
+                borderTop: "1px solid var(--border)",
+              }}
+            >
+              <span className="mono" style={{ letterSpacing: "1px" }}>
+                {last}
+              </span>
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }

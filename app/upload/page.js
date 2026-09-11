@@ -1,373 +1,341 @@
-import Link from "next/link";
-import { query } from "../lib/db";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useState } from "react";
+import { saveAttendance, addPlayerByName } from "./actions";
 
-const TYPE_LABELS = {
-  vs: "VS",
-  poll: "Poll",
-  frankie: "Frankie",
-  zombies: "Zombies",
-  war: "War Event",
-  contribution: "Contribution",
-};
+const THRESHOLD = 0.7;
+const ROSTER_TYPES = ["zombies", "war"];
 
-function windowBounds(weeks) {
-  const now = new Date();
-  const day = now.getUTCDay();
-  const sinceMonday = day === 0 ? 6 : day - 1;
+const DEFAULT_DURATION = { zombies: 30, war: 120 };
 
-  const thisMonday = new Date(
-    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
-  );
-  thisMonday.setUTCDate(thisMonday.getUTCDate() - sinceMonday);
+const LABELS = { frankie: "Frankie", zombies: "Zombies", war: "War Event" };
 
-  const start = new Date(thisMonday);
-  start.setUTCDate(start.getUTCDate() - weeks * 7);
+export default function UploadPage() {
+  const [eventType, setEventType] = useState("frankie");
+  const [eventDate, setEventDate] = useState("");
+  const [duration, setDuration] = useState(30);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const [data, setData] = useState(null);
+  const [choices, setChoices] = useState({});
+  const [renameFlags, setRenameFlags] = useState({});
+  const [message, setMessage] = useState("");
 
-  const end = new Date(thisMonday);
-  end.setUTCDate(end.getUTCDate() - 1);
+  const usesRoster = ROSTER_TYPES.includes(eventType);
 
-  return {
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-  };
-}
-
-function formatDate(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-GB", {
-    day: "numeric",
-    month: "short",
-  });
-}
-
-const card = {
-  background: "var(--bg-card)",
-  border: "1px solid var(--border)",
-  borderRadius: "8px",
-  padding: "16px",
-  position: "relative",
-  overflow: "hidden",
-};
-
-const statValue = {
-  fontFamily: "'Share Tech Mono', monospace",
-  fontSize: "26px",
-  fontWeight: 700,
-  color: "var(--accent3)",
-  textShadow: "0 0 10px rgba(48,212,160,0.4)",
-  lineHeight: 1.2,
-};
-
-const statLabel = {
-  fontFamily: "'Share Tech Mono', monospace",
-  fontSize: "10px",
-  letterSpacing: "2px",
-  textTransform: "uppercase",
-  color: "var(--text-dim)",
-  marginBottom: "8px",
-};
-
-export default async function Home() {
-  const { start, end } = windowBounds(4);
-
-  let playerCount = 0;
-  let lastEvent = null;
-  const stats = {};
-  const latest = {};
-  let error = null;
-
-  try {
-    const counts = await query("SELECT COUNT(*)::int AS count FROM players");
-    playerCount = counts[0].count;
-
-    const recent = await query(
-      `SELECT e.id, e.event_type, e.event_date,
-              COUNT(*) FILTER (WHERE s.value > 0)::int AS participants
-       FROM events e
-       LEFT JOIN scores s ON s.event_id = e.id AND s.measure = e.event_type
-       GROUP BY e.id
-       ORDER BY e.event_date DESC, e.id DESC
-       LIMIT 1`,
-    );
-    lastEvent = recent[0] || null;
-
-    const rows = await query(
-      `SELECT s.measure,
-              COUNT(DISTINCT e.id)::int AS events,
-              SUM(s.value) AS total,
-              COUNT(*) FILTER (WHERE s.value > 0)::int AS positives
-       FROM scores s
-       JOIN events e ON e.id = s.event_id
-       WHERE e.event_date >= $1 AND e.event_date <= $2
-       GROUP BY s.measure`,
-      [start, end],
-    );
-
-    for (const r of rows) {
-      stats[r.measure] = {
-        events: r.events,
-        total: Number(r.total),
-        positives: r.positives,
-      };
-    }
-
-    const latestRows = await query(
-      `SELECT DISTINCT ON (s.measure)
-              s.measure, e.event_date,
-              SUM(s.value) OVER (PARTITION BY s.event_id, s.measure) AS total,
-              COUNT(*) FILTER (WHERE s.value > 0)
-                OVER (PARTITION BY s.event_id, s.measure)::int AS positives
-       FROM scores s
-       JOIN events e ON e.id = s.event_id
-       WHERE e.event_date >= $1 AND e.event_date <= $2
-       ORDER BY s.measure, e.event_date DESC`,
-      [start, end],
-    );
-
-    for (const r of latestRows) {
-      latest[r.measure] = {
-        date: r.event_date,
-        total: Number(r.total),
-        positives: r.positives,
-      };
-    }
-  } catch (err) {
-    error = err.message;
+  function changeType(value) {
+    setEventType(value);
+    if (DEFAULT_DURATION[value]) setDuration(DEFAULT_DURATION[value]);
+    setData(null);
+    setMessage("");
   }
 
-  function attendanceCard(measure, label, colour) {
-    const s = stats[measure];
-    const l = latest[measure];
-
-    if (!s || s.events === 0) {
-      return { label, colour, empty: true };
-    }
-
-    return {
-      label,
-      colour,
-      value: String(Math.round(s.positives / s.events)),
-      suffix: `of ${playerCount} per event`,
-      last: l ? `Last ${formatDate(l.date)} · ${l.positives}` : null,
-    };
+  function qualifies(row) {
+    if (!data?.usesRoster) return true;
+    if (row.status === null) return false;
+    return row.status <= duration;
   }
 
-  function valueCard(measure, label, colour) {
-    const s = stats[measure];
-    const l = latest[measure];
+  async function handleExtract(e) {
+    e.preventDefault();
+    setBusy(true);
+    setError("");
+    setData(null);
+    setMessage("");
 
-    if (!s || s.events === 0 || playerCount === 0) {
-      return { label, colour, empty: true };
+    const formData = new FormData(e.target);
+    formData.set("event_type", eventType);
+
+    try {
+      const res = await fetch("/api/extract", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await res.json();
+
+      if (result.error) {
+        setError(result.error);
+      } else {
+        setData(result);
+
+        const initial = {};
+        result.rows.forEach((row, i) => {
+          const best = row.candidates[0];
+          const withinTime =
+            !result.usesRoster ||
+            (row.status !== null && row.status <= duration);
+
+          initial[i] =
+            best && best.score >= THRESHOLD && withinTime
+              ? String(best.id)
+              : "";
+        });
+        setChoices(initial);
+        setRenameFlags({});
+      }
+    } catch (err) {
+      setError(err.message);
     }
 
-    const avg = s.total / s.events / playerCount;
-    const lastAvg = l ? l.total / playerCount : null;
-
-    return {
-      label,
-      colour,
-      value: avg.toFixed(1),
-      suffix: "per player per week",
-      last:
-        lastAvg !== null
-          ? `Last ${formatDate(l.date)} · ${lastAvg.toFixed(1)}`
-          : null,
-    };
+    setBusy(false);
   }
 
-  const cards = [
-    valueCard("vs", "VS score", "#60c0ff"),
-    attendanceCard("frankie", "Frankie attendance", "#ff7060"),
-    attendanceCard("zombies", "Zombies attendance", "#80ff90"),
-    attendanceCard("war", "War attendance", "#ffd060"),
-    valueCard("contribution", "Contribution", "#c080ff"),
-  ];
+  async function handleSave() {
+    const presentIds = [];
+    const renames = [];
+    const newNames = [];
+
+    data.rows.forEach((row, i) => {
+      const choice = choices[i];
+      if (!choice) return;
+
+      if (choice === "new") {
+        newNames.push(row.extracted);
+        return;
+      }
+
+      const id = Number(choice);
+      presentIds.push(id);
+
+      if (renameFlags[i]) renames.push({ id, name: row.extracted });
+    });
+
+    const ok = window.confirm(
+      `${presentIds.length + newNames.length} players marked present.\n` +
+        (newNames.length ? `${newNames.length} added as new players.\n` : "") +
+        (renames.length ? `${renames.length} renamed.\n` : "") +
+        `\nSave this event?`,
+    );
+
+    if (!ok) return;
+
+    setBusy(true);
+    setMessage("");
+    setError("");
+
+    for (const name of newNames) {
+      const created = await addPlayerByName(name);
+      if (created) presentIds.push(created.id);
+    }
+
+    const result = await saveAttendance(
+      eventType,
+      eventDate,
+      presentIds,
+      renames,
+    );
+
+    setBusy(false);
+
+    if (result.error) {
+      setError(result.error);
+      return;
+    }
+
+    const total = result.present + result.absent;
+
+    setMessage(
+      `${LABELS[eventType]} — ${eventDate}. ${total} players updated, ` +
+        `${result.present} marked as attending, ${result.absent} marked as absent.`,
+    );
+
+    setData(null);
+    setChoices({});
+    setRenameFlags({});
+    setEventDate("");
+  }
+
+  function statusLabel(row) {
+    if (row.status === null) return "—";
+    if (row.status === 0) return "Online";
+    if (row.status < 60) return `${row.status}m`;
+    if (row.status < 1440) return `${Math.round(row.status / 60)}h`;
+    return `${Math.round(row.status / 1440)}d`;
+  }
+
+  const selected = data ? Object.values(choices).filter((c) => c).length : 0;
 
   return (
     <>
-      <header
+      <div className="page-title">Image Entry</div>
+      <div className="page-sub">
+        {usesRoster
+          ? "Screenshot the member list as the event ends. Anyone inside the duration counts as present"
+          : "Screenshot the event ranking list. Anyone not found is marked absent"}
+      </div>
+
+      <form
+        onSubmit={handleExtract}
         style={{
-          textAlign: "center",
-          padding: "32px 0 20px",
-          position: "relative",
+          display: "flex",
+          gap: "8px",
+          flexWrap: "wrap",
+          alignItems: "center",
+          marginBottom: "20px",
         }}
       >
-        <div style={{ position: "absolute", top: "32px", right: 0 }}>
-          <Link
-            href="/settings"
-            className="mono"
-            style={{ color: "var(--text-dim)" }}
-          >
-            ⚙ Settings
-          </Link>
-        </div>
-        <div className="game-title">
-          DW <span>ALLIANCE</span>
-        </div>
-        <div className="subtitle">Participation Tracker</div>
-        <div
-          style={{
-            height: "1px",
-            background:
-              "linear-gradient(90deg, transparent, var(--border-glow), var(--accent), var(--border-glow), transparent)",
-            marginTop: "20px",
-            opacity: 0.5,
-          }}
+        <select value={eventType} onChange={(e) => changeType(e.target.value)}>
+          <option value="frankie">Frankie</option>
+          <option value="zombies">Zombies</option>
+          <option value="war">War Event</option>
+        </select>
+
+        <input
+          type="date"
+          value={eventDate}
+          onChange={(e) => setEventDate(e.target.value)}
+          required
         />
-      </header>
 
-      {error && <div className="msg-err">Database error: {error}</div>}
+        {usesRoster && (
+          <span style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <label className="mono">Event duration</label>
+            <input
+              type="number"
+              min="1"
+              value={duration}
+              onChange={(e) => setDuration(Number(e.target.value))}
+              style={{ width: "80px", textAlign: "right" }}
+              required
+            />
+            <span className="mono">minutes</span>
+          </span>
+        )}
 
-      <div className="section-label">Overview</div>
+        <input type="file" name="images" accept="image/*" multiple required />
 
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
-          gap: "12px",
-          marginBottom: "28px",
-        }}
-      >
-        <div style={card}>
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: "2px",
-              background: "var(--accent3)",
-              opacity: 0.85,
-            }}
-          />
-          <div style={statLabel}>Roster</div>
-          <div style={statValue}>{playerCount}</div>
-          <div
-            className="mono"
-            style={{ marginTop: "4px", letterSpacing: "1px" }}
-          >
-            players tracked
+        <button type="submit" disabled={busy}>
+          {busy ? "Reading…" : "Extract"}
+        </button>
+      </form>
+
+      {error && <div className="msg-err">{error}</div>}
+      {message && <div className="msg-ok">{message}</div>}
+
+      {data && (
+        <>
+          <div className="section-label">
+            {data.rows.length} names · {data.screenshots} screenshots ·{" "}
+            {selected} selected
+            {data.duplicatesRemoved > 0
+              ? ` · ${data.duplicatesRemoved} duplicates`
+              : ""}
           </div>
-          <div
-            style={{
-              marginTop: "14px",
-              paddingTop: "10px",
-              borderTop: "1px solid var(--border)",
-            }}
-          >
-            <Link
-              href="/players"
-              className="mono"
-              style={{ color: "var(--accent3)", letterSpacing: "2px" }}
-            >
-              Roster management →
-            </Link>
-          </div>
-        </div>
 
-        <div style={card}>
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              right: 0,
-              height: "2px",
-              background: "var(--accent)",
-              opacity: 0.85,
-            }}
-          />
-          <div style={statLabel}>Last event</div>
-          {lastEvent ? (
-            <>
-              <div
-                style={{
-                  ...statValue,
-                  color: "var(--accent)",
-                  textShadow: "0 0 10px rgba(232,160,32,0.4)",
-                }}
-              >
-                {TYPE_LABELS[lastEvent.event_type] || lastEvent.event_type}
-              </div>
-              <div
-                className="mono"
-                style={{ marginTop: "4px", letterSpacing: "1px" }}
-              >
-                {formatDate(lastEvent.event_date)} · {lastEvent.participants}{" "}
-                participants
-              </div>
-            </>
-          ) : (
-            <>
-              <div
-                style={{
-                  ...statValue,
-                  color: "var(--text-dim)",
-                  textShadow: "none",
-                }}
-              >
-                —
-              </div>
-              <div
-                className="mono"
-                style={{ marginTop: "4px", letterSpacing: "1px" }}
-              >
-                nothing logged yet
-              </div>
-            </>
+          {data.failures.length > 0 && (
+            <div className="msg-warn">
+              {data.failures.length} screenshot(s) failed:{" "}
+              {data.failures.map((f) => f.file).join(", ")}
+            </div>
           )}
-          <div
-            style={{
-              marginTop: "14px",
-              paddingTop: "10px",
-              borderTop: "1px solid var(--border)",
-              display: "flex",
-              gap: "16px",
-            }}
-          >
-            <Link
-              href="/log"
-              className="mono"
-              style={{ color: "var(--accent)", letterSpacing: "2px" }}
-            >
-              Manual entry →
-            </Link>
-            <Link
-              href="/upload"
-              className="mono"
-              style={{ color: "var(--accent)", letterSpacing: "2px" }}
-            >
-              Image entry →
-            </Link>
+
+          <div className="panel scroll-x">
+            <table className="data">
+              <thead>
+                <tr>
+                  <th>Extracted</th>
+                  {data.usesRoster && (
+                    <th className="num" style={{ width: "90px" }}>
+                      Last seen
+                    </th>
+                  )}
+                  <th style={{ width: "240px" }}>Assign to</th>
+                  <th style={{ width: "90px" }}>Rename</th>
+                  <th className="num" style={{ width: "80px" }}>
+                    Match
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {data.rows.map((row, i) => {
+                  const best = row.candidates[0];
+                  const auto = best && best.score >= THRESHOLD;
+                  const choice = choices[i];
+                  const inTime = qualifies(row);
+
+                  return (
+                    <tr key={i} style={{ opacity: inTime ? 1 : 0.45 }}>
+                      <td
+                        style={{
+                          fontFamily: "'Share Tech Mono', monospace",
+                          fontSize: "14px",
+                        }}
+                      >
+                        {row.extracted}
+                      </td>
+
+                      {data.usesRoster && (
+                        <td
+                          className="num"
+                          style={{
+                            color: inTime
+                              ? "var(--accent3)"
+                              : "var(--text-dim)",
+                          }}
+                        >
+                          {statusLabel(row)}
+                        </td>
+                      )}
+
+                      <td>
+                        <select
+                          style={{ width: "100%" }}
+                          value={choice}
+                          onChange={(e) =>
+                            setChoices({ ...choices, [i]: e.target.value })
+                          }
+                        >
+                          <option value="">Skip</option>
+                          <option value="new">+ Add as new player</option>
+                          {data.players.map((p) => (
+                            <option key={p.id} value={p.id}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </td>
+
+                      <td>
+                        {choice && choice !== "new" && (
+                          <input
+                            type="checkbox"
+                            checked={!!renameFlags[i]}
+                            onChange={(e) =>
+                              setRenameFlags({
+                                ...renameFlags,
+                                [i]: e.target.checked,
+                              })
+                            }
+                          />
+                        )}
+                      </td>
+
+                      <td
+                        className="num"
+                        style={{
+                          color: auto ? "var(--accent3)" : "var(--warn)",
+                        }}
+                      >
+                        {best ? best.score.toFixed(2) : "—"}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-        </div>
-      </div>
 
-      <div className="section-label">Four week averages</div>
-
-      <div
-        style={{
-          display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-          gap: "12px",
-        }}
-      >
-        {cards.map((c) => (
-          <StatCard key={c.label} {...c} />
-        ))}
-      </div>
-
-      <p style={{ marginTop: "24px", textAlign: "center" }}>
-        <Link
-          href="/rankings"
-          className="mono"
-          style={{ color: "var(--accent3)", letterSpacing: "3px" }}
-        >
-          View full rankings →
-        </Link>
-      </p>
+          <p style={{ marginTop: "20px" }}>
+            <button
+              type="button"
+              onClick={handleSave}
+              disabled={busy || !eventDate}
+            >
+              {busy ? "Saving…" : "Save attendance"}
+            </button>
+          </p>
+        </>
+      )}
 
       <div className="mrfox-sig">
         <div className="mrfox-crafted">Crafted by</div>
@@ -375,77 +343,5 @@ export default async function Home() {
         <div className="mrfox-title">Dark War · Community Tools</div>
       </div>
     </>
-  );
-}
-
-function StatCard({ label, value, suffix, last, colour, empty }) {
-  return (
-    <div style={card}>
-      <div
-        style={{
-          position: "absolute",
-          top: 0,
-          left: 0,
-          right: 0,
-          height: "2px",
-          background: colour,
-          opacity: 0.85,
-        }}
-      />
-      <div style={statLabel}>{label}</div>
-
-      {empty ? (
-        <>
-          <div
-            style={{
-              ...statValue,
-              color: "var(--text-dim)",
-              textShadow: "none",
-            }}
-          >
-            —
-          </div>
-          <div
-            className="mono"
-            style={{ marginTop: "4px", letterSpacing: "1px", lineHeight: 1.5 }}
-          >
-            No data in last 4 weeks
-            <br />
-            please upload
-          </div>
-        </>
-      ) : (
-        <>
-          <div
-            style={{
-              ...statValue,
-              color: colour,
-              textShadow: `0 0 10px ${colour}44`,
-            }}
-          >
-            {value}
-          </div>
-          <div
-            className="mono"
-            style={{ marginTop: "4px", letterSpacing: "1px" }}
-          >
-            {suffix}
-          </div>
-          {last && (
-            <div
-              style={{
-                marginTop: "10px",
-                paddingTop: "8px",
-                borderTop: "1px solid var(--border)",
-              }}
-            >
-              <span className="mono" style={{ letterSpacing: "1px" }}>
-                {last}
-              </span>
-            </div>
-          )}
-        </>
-      )}
-    </div>
   );
 }
