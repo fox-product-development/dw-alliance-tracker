@@ -277,8 +277,8 @@ export default async function Home() {
     return { label, colour, average, averageSuffix, lowerValue, lowerSuffix };
   }
 
-  const vsCard = buildCard("vs", "VS score", "#f02906", "value");
-  const warCard = buildCard("war", "War attendance", "#606aff", "attendance");
+  const vsCard = buildCard("vs", "VS score", "#606aff", "value");
+  const warCard = buildCard("war", "War attendance", "#f02906", "attendance");
   const shieldCard = buildCard(
     "kill_event",
     "Kill Event shields",
