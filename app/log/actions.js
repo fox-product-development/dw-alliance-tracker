@@ -29,7 +29,7 @@ export async function logEvent(formData) {
 
   if (!eventType || !eventDate) return;
 
-  const players = await query("SELECT id FROM players");
+  const players = await query("SELECT id FROM players WHERE status = 'active'");
 
   const eventRows = await query(
     `INSERT INTO events (event_type, event_date)
@@ -47,7 +47,7 @@ export async function logEvent(formData) {
   if (eventType === "kill_event") {
     await query(
       `INSERT INTO scores (player_id, event_id, measure, value)
-       SELECT p.id, $1, 'kill_event', 1 FROM players p
+              SELECT p.id, $1, 'kill_event', 1 FROM players p WHERE p.status = 'active'
        ON CONFLICT (player_id, event_id, measure) DO NOTHING`,
       [eventId],
     );

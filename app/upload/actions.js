@@ -34,7 +34,7 @@ export async function saveAttendance(
 
   await query(
     `INSERT INTO scores (player_id, event_id, measure, value)
-     SELECT p.id, $1, $2, 0 FROM players p
+         SELECT p.id, $1, $2, 0 FROM players p WHERE p.status = 'active'
      ON CONFLICT (player_id, event_id, measure) DO NOTHING`,
     [eventId, eventType],
   );
@@ -70,8 +70,10 @@ export async function addPlayerByName(name) {
   if (!trimmed) return null;
 
   const rows = await query(
-    `INSERT INTO players (name) VALUES ($1)
-     ON CONFLICT (name) DO UPDATE SET name = EXCLUDED.name
+    `INSERT INTO players (name, status, status_date)
+     VALUES ($1, 'active', CURRENT_DATE)
+     ON CONFLICT (name) DO UPDATE
+       SET status = 'active', status_date = CURRENT_DATE
      RETURNING id, name`,
     [trimmed],
   );

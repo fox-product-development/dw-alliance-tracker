@@ -167,7 +167,7 @@ export async function POST(request) {
     const prompt = usesRoster ? ROSTER_PROMPT : RANKING_PROMPT;
 
     const players = await query(
-      "SELECT id, name FROM players ORDER BY name ASC",
+      "SELECT id, name FROM players WHERE status = 'active' ORDER BY name ASC",
     );
 
     const extracted = [];

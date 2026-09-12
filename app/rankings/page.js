@@ -77,8 +77,9 @@ export default async function RankingsPage({ searchParams }) {
     texts[r.key] = r.text_value;
   }
 
-  const players = await query("SELECT id, name FROM players ORDER BY name ASC");
-
+  const players = await query(
+    "SELECT id, name FROM players WHERE status = 'active' ORDER BY name ASC",
+  );
   const rows = await query(
     `SELECT s.player_id, s.measure, s.value, e.event_date
      FROM scores s

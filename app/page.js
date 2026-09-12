@@ -68,7 +68,9 @@ export default async function Home() {
   let error = null;
 
   try {
-    const counts = await query("SELECT COUNT(*)::int AS count FROM players");
+    const counts = await query(
+      "SELECT COUNT(*)::int AS count FROM players WHERE status = 'active'",
+    );
     playerCount = counts[0].count;
 
     const recent = await query(
