@@ -1,9 +1,28 @@
 "use client";
 
 import { useState } from "react";
-import { addPlayer, renamePlayer, deletePlayer } from "./actions";
+import {
+  addPlayer,
+  renamePlayer,
+  removePlayer,
+  restorePlayer,
+} from "./actions";
 
-export default function PlayerTable({ players }) {
+function daysLeft(statusDate) {
+  const removed = new Date(statusDate);
+  const now = new Date();
+  const elapsed = Math.floor((now - removed) / 86400000);
+  return Math.max(0, 14 - elapsed);
+}
+
+function formatDate(d) {
+  return new Date(d).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "short",
+  });
+}
+
+export default function PlayerTable({ active, removed }) {
   const [target, setTarget] = useState(null);
   const [stage, setStage] = useState(1);
   const [busy, setBusy] = useState(false);
@@ -18,12 +37,12 @@ export default function PlayerTable({ players }) {
     setStage(1);
   }
 
-  async function confirmDelete() {
+  async function confirmRemove() {
     setBusy(true);
 
     const formData = new FormData();
     formData.set("id", target.id);
-    await deletePlayer(formData);
+    await removePlayer(formData);
 
     setBusy(false);
     close();
@@ -44,16 +63,12 @@ export default function PlayerTable({ players }) {
         <button type="submit">Add</button>
       </form>
 
-      <div className="panel">
+      <div className="section-label">Active — {active.length}</div>
+
+      <div className="panel" style={{ marginBottom: "28px" }}>
         <table className="data">
-          <thead>
-            <tr>
-              <th>Player</th>
-              <th style={{ width: "110px" }}></th>
-            </tr>
-          </thead>
           <tbody>
-            {players.map((p) => (
+            {active.map((p) => (
               <tr key={p.id}>
                 <td>
                   <form
@@ -71,13 +86,13 @@ export default function PlayerTable({ players }) {
                     </button>
                   </form>
                 </td>
-                <td style={{ textAlign: "right" }}>
+                <td style={{ width: "110px", textAlign: "right" }}>
                   <button
                     type="button"
                     className="danger"
                     onClick={() => open(p)}
                   >
-                    Delete
+                    Remove
                   </button>
                 </td>
               </tr>
@@ -85,6 +100,38 @@ export default function PlayerTable({ players }) {
           </tbody>
         </table>
       </div>
+
+      <div className="section-label">Recently removed — {removed.length}</div>
+
+      {removed.length === 0 ? (
+        <p className="mono" style={{ letterSpacing: "1px" }}>
+          Nobody has been removed
+        </p>
+      ) : (
+        <div className="panel">
+          <table className="data">
+            <tbody>
+              {removed.map((p) => (
+                <tr key={p.id}>
+                  <td className="dim">{p.name}</td>
+                  <td className="mono" style={{ letterSpacing: "1px" }}>
+                    removed {formatDate(p.status_date)} · deleted in{" "}
+                    {daysLeft(p.status_date)} days
+                  </td>
+                  <td style={{ width: "110px", textAlign: "right" }}>
+                    <form action={restorePlayer}>
+                      <input type="hidden" name="id" value={p.id} />
+                      <button type="submit" className="quiet">
+                        Restore
+                      </button>
+                    </form>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {target && (
         <div
@@ -96,9 +143,9 @@ export default function PlayerTable({ players }) {
           <div className="dialog">
             {stage === 1 ? (
               <>
-                <div className="dialog-title">Delete player</div>
+                <div className="dialog-title">Remove player</div>
                 <div className="dialog-body">
-                  Do you want to delete <strong>{target.name}</strong>?
+                  Do you want to remove <strong>{target.name}</strong>?
                 </div>
                 <div className="dialog-actions">
                   <button type="button" className="quiet" onClick={close}>
@@ -111,10 +158,12 @@ export default function PlayerTable({ players }) {
               </>
             ) : (
               <>
-                <div className="dialog-title">This cannot be undone</div>
+                <div className="dialog-title">Confirm removal</div>
                 <div className="dialog-warn">
-                  Deleting {target.name} will also delete all of their scores
-                  and event history. This cannot be recovered.
+                  {target.name} will disappear from rankings, event logging and
+                  the dashboard. Their history is kept for 14 days and can be
+                  restored in that time. After 14 days they and all their scores
+                  are deleted permanently.
                 </div>
                 <div className="dialog-actions">
                   <button
@@ -128,10 +177,10 @@ export default function PlayerTable({ players }) {
                   <button
                     type="button"
                     className="danger"
-                    onClick={confirmDelete}
+                    onClick={confirmRemove}
                     disabled={busy}
                   >
-                    {busy ? "Deleting…" : "Delete"}
+                    {busy ? "Removing…" : "Remove"}
                   </button>
                 </div>
               </>

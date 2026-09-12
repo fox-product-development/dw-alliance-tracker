@@ -4,14 +4,27 @@ import PlayerTable from "./PlayerTable";
 export const dynamic = "force-dynamic";
 
 export default async function PlayersPage() {
-  const players = await query("SELECT id, name FROM players ORDER BY name ASC");
+  const active = await query(
+    `SELECT id, name, status_date FROM players
+     WHERE status = 'active'
+     ORDER BY name ASC`,
+  );
+
+  const removed = await query(
+    `SELECT id, name, status_date FROM players
+     WHERE status = 'removed'
+     ORDER BY status_date ASC, name ASC`,
+  );
 
   return (
     <>
       <div className="page-title">Roster Management</div>
-      <div className="page-sub">{players.length} players</div>
+      <div className="page-sub">
+        {active.length} active
+        {removed.length > 0 && ` · ${removed.length} pending deletion`}
+      </div>
 
-      <PlayerTable players={players} />
+      <PlayerTable active={active} removed={removed} />
 
       <div className="mrfox-sig">
         <div className="mrfox-crafted">Crafted by</div>
