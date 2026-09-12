@@ -9,6 +9,8 @@ const LABELS = {
   weight_frankie: "Frankie",
   weight_zombies: "Zombies",
   weight_war: "War",
+  weight_black_gold: "Black Gold Battlefield",
+  weight_kill_event: "Kill Event shields",
   weight_car_cp: "Car CP",
   weight_contribution: "Contribution",
   vs_floor: "VS floor",
@@ -32,6 +34,8 @@ const WEIGHT_ORDER = [
   "weight_frankie",
   "weight_zombies",
   "weight_war",
+  "weight_black_gold",
+  "weight_kill_event",
   "weight_car_cp",
   "weight_contribution",
 ];
