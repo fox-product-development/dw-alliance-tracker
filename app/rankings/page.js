@@ -53,6 +53,8 @@ const WEIGHT_KEYS = {
   frankie: "weight_frankie",
   zombies: "weight_zombies",
   war: "weight_war",
+  black_gold: "weight_black_gold",
+  kill_event: "weight_kill_event",
   car_cp: "weight_car_cp",
   contribution: "weight_contribution",
 };
@@ -114,6 +116,7 @@ export default async function RankingsPage({ searchParams }) {
         avg: sum / values.length,
         latest: values[values.length - 1],
         count: values.length,
+        sum,
       };
 
       weighted += convert(measure, entry, settings) * weight;
@@ -141,7 +144,13 @@ export default async function RankingsPage({ searchParams }) {
 
   function rate(d) {
     if (!d) return "—";
-    return `${Math.round(d.avg * d.count)}/${d.count}`;
+    return `${Math.round(d.sum)}/${d.count}`;
+  }
+
+  function halves(d) {
+    if (!d) return "—";
+    const shown = Number.isInteger(d.sum) ? d.sum : d.sum.toFixed(1);
+    return `${shown}/${d.count}`;
   }
 
   return (
@@ -231,6 +240,8 @@ export default async function RankingsPage({ searchParams }) {
               <th className="num">Frankie</th>
               <th className="num">Zombies</th>
               <th className="num">War</th>
+              <th className="num">BgB</th>
+              <th className="num">Shield</th>
               <th className="num">Car</th>
               <th className="num">Score</th>
             </tr>
@@ -248,7 +259,7 @@ export default async function RankingsPage({ searchParams }) {
 
                 {p.score === null ? (
                   <td
-                    colSpan={7}
+                    colSpan={9}
                     className="mono"
                     style={{ textAlign: "right" }}
                   >
@@ -263,6 +274,8 @@ export default async function RankingsPage({ searchParams }) {
                     <td className="num">{rate(p.detail.frankie)}</td>
                     <td className="num">{rate(p.detail.zombies)}</td>
                     <td className="num">{rate(p.detail.war)}</td>
+                    <td className="num">{halves(p.detail.black_gold)}</td>
+                    <td className="num">{rate(p.detail.kill_event)}</td>
                     <td className="num">
                       {p.detail.car_cp ? p.detail.car_cp.latest : "—"}
                     </td>

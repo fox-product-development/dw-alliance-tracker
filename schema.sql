@@ -5,7 +5,8 @@ CREATE TABLE IF NOT EXISTS players (
 
 CREATE TABLE IF NOT EXISTS events (
   id          SERIAL PRIMARY KEY,
-  event_type  TEXT NOT NULL CHECK (event_type IN ('vs','poll','frankie','zombies','contribution','war')),
+  event_type  TEXT NOT NULL CHECK (event_type IN
+                ('vs','poll','frankie','zombies','contribution','war','black_gold','kill_event')),
   event_date  DATE NOT NULL,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   UNIQUE (event_type, event_date)
@@ -16,8 +17,10 @@ CREATE TABLE IF NOT EXISTS scores (
   player_id  INTEGER NOT NULL REFERENCES players(id) ON DELETE CASCADE,
   event_id   INTEGER NOT NULL REFERENCES events(id) ON DELETE CASCADE,
   measure    TEXT NOT NULL CHECK (measure IN
-               ('vs','poll_response','car_cp','frankie','zombies','contribution','war')),
+               ('vs','poll_response','car_cp','frankie','zombies','contribution',
+                'war','black_gold','kill_event')),
   value      NUMERIC NOT NULL,
+  reason     TEXT,
   UNIQUE (player_id, event_id, measure)
 );
 
@@ -38,6 +41,8 @@ INSERT INTO settings (key, value) VALUES
   ('weight_car_cp',       0.12),
   ('weight_contribution', 0.04),
   ('weight_war',          0),
+  ('weight_black_gold',   0),
+  ('weight_kill_event',   0),
   ('vs_floor',            2),
   ('vs_cap',              10),
   ('vs_curve_exponent',   1.5),
