@@ -45,7 +45,7 @@ const statValue = {
 
 const statLabel = {
   fontFamily: "'Share Tech Mono', monospace",
-  fontSize: "10px",
+  fontSize: "11px",
   letterSpacing: "2px",
   textTransform: "uppercase",
   color: "var(--text-dim)",
@@ -277,8 +277,8 @@ export default async function Home() {
     return { label, colour, average, averageSuffix, lowerValue, lowerSuffix };
   }
 
-  const vsCard = buildCard("vs", "VS score", "#60c0ff", "value");
-  const warCard = buildCard("war", "War attendance", "#ffd060", "attendance");
+  const vsCard = buildCard("vs", "VS score", "#f02906", "value");
+  const warCard = buildCard("war", "War attendance", "#606aff", "attendance");
   const shieldCard = buildCard(
     "kill_event",
     "Kill Event shields",
@@ -474,7 +474,7 @@ export default async function Home() {
 }
 
 function BgbCard({ data, playerCount }) {
-  const colour = "#c080ff";
+  const colour = "#e6b515";
 
   const items = [
     { key: "accept", label: "accepted" },
