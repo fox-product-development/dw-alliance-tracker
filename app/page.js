@@ -5,12 +5,9 @@ import { windowBounds, iso } from "../lib/window";
 export const dynamic = "force-dynamic";
 
 const TYPE_LABELS = {
-  vs: "VS",
-  poll: "Poll",
   frankie: "Frankie",
   zombies: "Zombies",
   war: "War Event",
-  contribution: "Contribution",
 };
 
 function formatDate(d) {
@@ -55,7 +52,41 @@ const statLabel = {
   marginBottom: "8px",
 };
 
-const WEEKLY = ["vs", "war", "contribution"];
+function Sparkline({ points, colour }) {
+  if (!points || points.length < 2) return null;
+
+  const width = 100;
+  const height = 28;
+  const max = Math.max(...points.map((p) => p.value));
+  const min = Math.min(...points.map((p) => p.value));
+  const range = max - min || 1;
+
+  const coords = points.map((p, i) => {
+    const x = (i / (points.length - 1)) * width;
+    const y = height - ((p.value - min) / range) * height;
+    return `${x.toFixed(2)},${y.toFixed(2)}`;
+  });
+
+  return (
+    <svg
+      viewBox={`0 0 ${width} ${height}`}
+      preserveAspectRatio="none"
+      style={{ width: "100%", height: "48px", display: "block" }}
+      role="img"
+      aria-label={`VS trend across ${points.length} days`}
+    >
+      <polyline
+        points={coords.join(" ")}
+        fill="none"
+        stroke={colour}
+        strokeWidth="1.5"
+        vectorEffect="non-scaling-stroke"
+        strokeLinejoin="round"
+        strokeLinecap="round"
+      />
+    </svg>
+  );
+}
 
 export default async function Home() {
   const { start, end } = windowBounds(28);
@@ -65,6 +96,8 @@ export default async function Home() {
   const stats = {};
   const lastSeven = {};
   const mostRecent = {};
+  let vsTrend = [];
+  let bgb = null;
   let error = null;
 
   try {
@@ -92,6 +125,7 @@ export default async function Home() {
               COUNT(*) FILTER (WHERE s.value > 0)::int AS positives
        FROM scores s
        JOIN events e ON e.id = s.event_id
+       JOIN players p ON p.id = s.player_id AND p.status = 'active'
        WHERE e.event_date >= $1 AND e.event_date <= $2
        GROUP BY s.measure`,
       [iso(start), iso(end)],
@@ -119,6 +153,7 @@ export default async function Home() {
               COUNT(*) FILTER (WHERE s.value > 0)::int AS positives
        FROM scores s
        JOIN events e ON e.id = s.event_id
+       JOIN players p ON p.id = s.player_id AND p.status = 'active'
        JOIN last_dates ld ON ld.measure = s.measure
        WHERE e.event_date > ld.last_date - 7
          AND e.event_date <= ld.last_date
@@ -143,6 +178,7 @@ export default async function Home() {
                 OVER (PARTITION BY s.event_id, s.measure)::int AS positives
        FROM scores s
        JOIN events e ON e.id = s.event_id
+       JOIN players p ON p.id = s.player_id AND p.status = 'active'
        WHERE e.event_date >= $1 AND e.event_date <= $2
        ORDER BY s.measure, e.event_date DESC`,
       [iso(start), iso(end)],
@@ -155,6 +191,43 @@ export default async function Home() {
         positives: r.positives,
       };
     }
+
+    const trendRows = await query(
+      `SELECT e.event_date, SUM(s.value) AS total
+       FROM scores s
+       JOIN events e ON e.id = s.event_id
+       JOIN players p ON p.id = s.player_id AND p.status = 'active'
+       WHERE s.measure = 'vs'
+         AND e.event_date >= $1 AND e.event_date <= $2
+       GROUP BY e.event_date
+       ORDER BY e.event_date ASC`,
+      [iso(start), iso(end)],
+    );
+
+    vsTrend = trendRows.map((r) => ({
+      date: r.event_date,
+      value: playerCount > 0 ? Number(r.total) / playerCount : 0,
+    }));
+
+    const bgbRows = await query(
+      `SELECT e.event_date, s.reason, COUNT(*)::int AS count
+       FROM scores s
+       JOIN events e ON e.id = s.event_id
+       JOIN players p ON p.id = s.player_id AND p.status = 'active'
+       WHERE s.measure = 'black_gold'
+         AND e.event_date = (
+           SELECT MAX(e2.event_date) FROM events e2
+           WHERE e2.event_type = 'black_gold'
+         )
+       GROUP BY e.event_date, s.reason`,
+      [],
+    );
+
+    if (bgbRows.length > 0) {
+      const breakdown = {};
+      for (const r of bgbRows) breakdown[r.reason || "no_response"] = r.count;
+      bgb = { date: bgbRows[0].event_date, breakdown };
+    }
   } catch (err) {
     error = err.message;
   }
@@ -162,9 +235,7 @@ export default async function Home() {
   function buildCard(measure, label, colour, kind) {
     const s = stats[measure];
 
-    if (!s || s.events === 0) {
-      return { label, colour, empty: true };
-    }
+    if (!s || s.events === 0) return { label, colour, empty: true };
 
     const isValue = kind === "value";
 
@@ -185,7 +256,7 @@ export default async function Home() {
     let lowerValue = null;
     let lowerSuffix = null;
 
-    if (WEEKLY.includes(measure)) {
+    if (["vs", "war", "contribution", "kill_event"].includes(measure)) {
       const w = lastSeven[measure];
 
       if (w && w.events > 0) {
@@ -203,20 +274,17 @@ export default async function Home() {
       }
     }
 
-    return {
-      label,
-      colour,
-      average,
-      averageSuffix,
-      lowerValue,
-      lowerSuffix,
-    };
+    return { label, colour, average, averageSuffix, lowerValue, lowerSuffix };
   }
 
-  const topRow = [
-    buildCard("vs", "VS score", "#60c0ff", "value"),
-    buildCard("war", "War attendance", "#ffd060", "attendance"),
-  ];
+  const vsCard = buildCard("vs", "VS score", "#60c0ff", "value");
+  const warCard = buildCard("war", "War attendance", "#ffd060", "attendance");
+  const shieldCard = buildCard(
+    "kill_event",
+    "Kill Event shields",
+    "#ff9060",
+    "attendance",
+  );
 
   const bottomRow = [
     buildCard("frankie", "Frankie attendance", "#ff7060", "attendance"),
@@ -367,10 +435,17 @@ export default async function Home() {
 
       <div className="section-label">Last 28 days</div>
 
+      <div style={{ marginBottom: "12px" }}>
+        <StatCard {...vsCard} trend={vsTrend} />
+      </div>
+
       <div className="stat-row two">
-        {topRow.map((c) => (
-          <StatCard key={c.label} {...c} />
-        ))}
+        <StatCard {...warCard} />
+        <StatCard {...shieldCard} />
+      </div>
+
+      <div style={{ marginBottom: "12px" }}>
+        <BgbCard data={bgb} playerCount={playerCount} />
       </div>
 
       <div className="stat-row three">
@@ -398,6 +473,89 @@ export default async function Home() {
   );
 }
 
+function BgbCard({ data, playerCount }) {
+  const colour = "#c080ff";
+
+  const items = [
+    { key: "accept", label: "accepted" },
+    { key: "decline", label: "declined" },
+    { key: "no_show", label: "no show" },
+    { key: "no_response", label: "no response" },
+  ];
+
+  return (
+    <div style={card}>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "2px",
+          background: colour,
+          opacity: 0.85,
+        }}
+      />
+      <div style={statLabel}>Black Gold Battlefield</div>
+
+      {!data ? (
+        <>
+          <div style={{ ...statValue, color: "var(--text-dim)" }}>—</div>
+          <div
+            className="mono"
+            style={{ marginTop: "4px", letterSpacing: "1px" }}
+          >
+            no events logged yet
+          </div>
+        </>
+      ) : (
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+              gap: "12px",
+              marginTop: "4px",
+            }}
+          >
+            {items.map((item) => (
+              <div key={item.key}>
+                <div
+                  style={{
+                    ...statValue,
+                    color: colour,
+                    textShadow: `0 0 10px ${colour}44`,
+                  }}
+                >
+                  {data.breakdown[item.key] || 0}
+                </div>
+                <div
+                  className="mono"
+                  style={{ marginTop: "2px", letterSpacing: "1px" }}
+                >
+                  {item.label}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div
+            style={{
+              marginTop: "14px",
+              paddingTop: "10px",
+              borderTop: "1px solid var(--border)",
+            }}
+          >
+            <span className="mono" style={{ letterSpacing: "1px" }}>
+              last event {formatShort(data.date)} · {playerCount} on roster
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 function StatCard({
   label,
   colour,
@@ -406,6 +564,7 @@ function StatCard({
   averageSuffix,
   lowerValue,
   lowerSuffix,
+  trend,
 }) {
   return (
     <div style={card}>
@@ -451,6 +610,25 @@ function StatCard({
           >
             {averageSuffix}
           </div>
+
+          {trend && trend.length > 1 && (
+            <div style={{ marginTop: "14px" }}>
+              <Sparkline points={trend} colour={colour} />
+              <div
+                className="mono"
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginTop: "4px",
+                  letterSpacing: "1px",
+                }}
+              >
+                <span>{formatShort(trend[0].date)}</span>
+                <span>{trend.length} days</span>
+                <span>{formatShort(trend[trend.length - 1].date)}</span>
+              </div>
+            </div>
+          )}
 
           <div
             style={{
