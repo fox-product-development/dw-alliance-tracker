@@ -11,7 +11,7 @@
   --accent2: #ff6030;
   --accent3: #30d4a0;
   --text: #0cd8f7;
-  --text-dim: ##06b1cb;
+  --text-dim: #06b1cb;
   --text-bright: #eef2ff;
   --danger: #ff7060;
   --warn: #ffb040;
@@ -582,4 +582,159 @@ input[type="number"]::-webkit-inner-spin-button {
 input[type="number"] {
   -moz-appearance: textfield;
   appearance: textfield;
+}
+/* Player summary popout */
+.popout {
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 24px;
+  max-width: 560px;
+  width: 100%;
+  max-height: 90vh;
+  overflow-y: auto;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.6);
+  position: relative;
+}
+
+.popout::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  opacity: 0.85;
+}
+
+.popout-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  padding: 5px 10px;
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+.popout-section {
+  margin-top: 22px;
+}
+
+.popout-weeknav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.popout-weeknav button {
+  padding: 4px 12px;
+  font-size: 15px;
+  line-height: 1;
+}
+
+.popout-week,
+.popout-tally {
+  display: grid;
+  gap: 8px;
+  text-align: center;
+}
+
+.popout-week {
+  grid-template-columns: repeat(7, 1fr);
+}
+
+.popout-tally {
+  grid-template-columns: repeat(5, 1fr);
+}
+
+.popout-day .mono {
+  font-size: 10.5px;
+  letter-spacing: 1px;
+  line-height: 1.3;
+  margin-bottom: 4px;
+}
+
+.popout-tally .popout-day .mono {
+  min-height: 26px;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  text-align: center;
+}
+
+.popout-val {
+  font-family: "Share Tech Mono", monospace;
+  font-size: 15px;
+  color: var(--text-bright);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+}
+
+.popout-val.holiday {
+  border: 2px solid #ff5ccd;
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 92, 205, 0.4);
+}
+
+.popout-val.total {
+  color: var(--accent);
+}
+
+@media (max-width: 560px) {
+  .popout-week,
+  .popout-tally {
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px 6px;
+  }
+}
+.player-link {
+  cursor: pointer;
+  border-bottom: 1px dotted var(--border);
+}
+
+.player-link:hover {
+  color: var(--text-bright);
+  border-bottom-color: var(--text-dim);
+}
+/* Popout loading state */
+.popout-body {
+  position: relative;
+}
+
+.popout-content {
+  transition: opacity 0.15s;
+}
+
+.popout-content.dimmed {
+  opacity: 0.35;
+}
+
+.popout-loading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2;
+}
+
+.popout-spinner {
+  width: 26px;
+  height: 26px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: popout-spin 0.7s linear infinite;
+}
+
+@keyframes popout-spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

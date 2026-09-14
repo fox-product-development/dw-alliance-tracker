@@ -1,7 +1,12 @@
 CREATE TABLE IF NOT EXISTS players (
-  id    SERIAL PRIMARY KEY,
-  name  TEXT NOT NULL UNIQUE
+  id           SERIAL PRIMARY KEY,
+  name         TEXT NOT NULL UNIQUE,
+  status       TEXT NOT NULL DEFAULT 'active'
+                 CHECK (status IN ('active','removed')),
+  status_date  DATE NOT NULL DEFAULT CURRENT_DATE
 );
+
+CREATE INDEX IF NOT EXISTS idx_players_status ON players (status);
 
 CREATE TABLE IF NOT EXISTS events (
   id          SERIAL PRIMARY KEY,
@@ -38,11 +43,11 @@ INSERT INTO settings (key, value) VALUES
   ('weight_poll',         0.20),
   ('weight_frankie',      0.12),
   ('weight_zombies',      0.12),
-  ('weight_car_cp',       0.12),
-  ('weight_contribution', 0.04),
   ('weight_war',          0),
   ('weight_black_gold',   0),
   ('weight_kill_event',   0),
+  ('weight_car_cp',       0.12),
+  ('weight_contribution', 0.04),
   ('vs_floor',            2),
   ('vs_cap',              10),
   ('vs_curve_exponent',   1.5),

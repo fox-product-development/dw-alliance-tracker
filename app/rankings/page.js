@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { query } from "../../lib/db";
 import { windowBounds, iso, pretty } from "../../lib/window";
+import PlayerName from "./PlayerName";
 
 export const dynamic = "force-dynamic";
 
@@ -256,7 +257,9 @@ export default async function RankingsPage({ searchParams }) {
                 >
                   {p.score === null ? "" : i + 1}
                 </td>
-                <td className="lock-2">{p.name}</td>
+                <td className="lock-2">
+                  <PlayerName playerId={p.id} name={p.name} />
+                </td>
 
                 {p.score === null ? (
                   <td
