@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { logEvent } from "./actions";
+import CsvImport from "./CsvImport";
 
 const TYPES = {
   vs: { label: "VS", control: "number" },
@@ -36,10 +37,19 @@ const BGB_CHOICES = [
 
 export default function LogForm({ players }) {
   const [eventType, setEventType] = useState("vs");
+  const [mode, setMode] = useState("manual");
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
 
   const control = TYPES[eventType].control;
+  const csvAvailable = eventType === "vs";
+  const showCsv = csvAvailable && mode === "csv";
+
+  function changeType(value) {
+    setEventType(value);
+    if (value !== "vs") setMode("manual");
+    setMessage("");
+  }
 
   async function handleSubmit(e) {
     e.preventDefault();
@@ -82,6 +92,67 @@ export default function LogForm({ players }) {
     } else {
       setMessage(`Saved. ${summary}`);
     }
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  const modeSwitch = csvAvailable && (
+    <div style={{ display: "flex", gap: "6px", marginBottom: "16px" }}>
+      <button
+        type="button"
+        className={mode === "manual" ? "" : "quiet"}
+        onClick={() => setMode("manual")}
+      >
+        Manual
+      </button>
+      <button
+        type="button"
+        className={mode === "csv" ? "" : "quiet"}
+        onClick={() => setMode("csv")}
+      >
+        CSV
+      </button>
+    </div>
+  );
+
+  const typeSelect = (
+    <select
+      name="event_type"
+      value={eventType}
+      onChange={(e) => changeType(e.target.value)}
+    >
+      {Object.entries(TYPES).map(([value, t]) => (
+        <option key={value} value={value}>
+          {t.label}
+        </option>
+      ))}
+    </select>
+  );
+
+  if (showCsv) {
+    return (
+      <div>
+        <div
+          style={{
+            display: "flex",
+            gap: "8px",
+            marginBottom: "16px",
+            flexWrap: "wrap",
+            alignItems: "center",
+          }}
+        >
+          {typeSelect}
+        </div>
+        {modeSwitch}
+        <CsvImport />
+
+        <div className="mrfox-sig">
+          <div className="mrfox-crafted">Crafted by</div>
+          <div className="mrfox-name">Mr Fox</div>
+          <div className="mrfox-title">Dark War · Community Tools</div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -93,27 +164,19 @@ export default function LogForm({ players }) {
         style={{
           display: "flex",
           gap: "8px",
-          marginBottom: "20px",
+          marginBottom: "16px",
           flexWrap: "wrap",
           alignItems: "center",
         }}
       >
-        <select
-          name="event_type"
-          value={eventType}
-          onChange={(e) => setEventType(e.target.value)}
-        >
-          {Object.entries(TYPES).map(([value, t]) => (
-            <option key={value} value={value}>
-              {t.label}
-            </option>
-          ))}
-        </select>
+        {typeSelect}
         <input type="date" name="event_date" required />
         <button type="submit" disabled={saving}>
           {saving ? "Saving…" : "Save event"}
         </button>
       </div>
+
+      {modeSwitch}
 
       {message && <div className="msg-ok">{message}</div>}
 

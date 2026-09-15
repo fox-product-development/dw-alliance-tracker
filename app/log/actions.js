@@ -83,20 +83,26 @@ export async function logEvent(formData) {
     };
   }
 
-  // Every other event type replaces the whole event
-  await query("DELETE FROM scores WHERE event_id = $1", [eventId]);
+  // Saving never removes what is already there. A player with no row gets
+  // one, using the form value or zero if they were left blank. A player who
+  // already has a row is only updated when the form actually carried a
+  // value for them, so a second save can add to a first without wiping it.
+  let inserted = 0;
+  let updated = 0;
 
   for (const player of players) {
     const raw = formData.get(`p_${player.id}`);
+    const blank = raw === null || String(raw).trim() === "";
+
     let value;
     let reason = null;
 
     if (eventType === "black_gold") {
-      const choice = raw === null ? "no_response" : String(raw);
+      const choice = blank ? "no_response" : String(raw);
       value = BGB_OPTIONS[choice] ?? 0;
       reason = choice;
     } else {
-      const trimmed = raw === null ? "" : String(raw).trim();
+      const trimmed = blank ? "" : String(raw).trim();
       const parsed = trimmed === "" ? 0 : Number(trimmed);
       value = Number.isFinite(parsed) ? parsed : 0;
 
@@ -106,15 +112,126 @@ export async function logEvent(formData) {
     }
 
     for (const row of buildRows(eventType, value, reason)) {
-      await query(
+      // DO UPDATE is guarded by the WHERE clause: with nothing entered for
+      // this player the conflicting row is left exactly as it was.
+      const result = await query(
         `INSERT INTO scores (player_id, event_id, measure, value, reason)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [player.id, eventId, row.measure, row.value, row.reason],
+         VALUES ($1, $2, $3, $4, $5)
+         ON CONFLICT (player_id, event_id, measure)
+         DO UPDATE SET value = EXCLUDED.value, reason = EXCLUDED.reason
+         WHERE $6
+         RETURNING (xmax = 0) AS was_insert`,
+        [player.id, eventId, row.measure, row.value, row.reason, !blank],
       );
+
+      if (result.length === 0) continue;
+      if (result[0].was_insert) inserted += 1;
+      else updated += 1;
     }
   }
 
   revalidatePath("/log");
   revalidatePath("/rankings");
   revalidatePath("/");
+
+  return { inserted, updated };
+}
+
+// Writes a parsed VS CSV. Dates already logged are skipped whole, so a
+// second upload of the same week only adds the days that are missing.
+export async function importVs(entries, dates) {
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return { error: "Nothing to import." };
+  }
+
+  if (!Array.isArray(dates) || dates.length === 0) {
+    return { error: "No dates supplied." };
+  }
+
+  const existing = await query(
+    `SELECT event_date::text AS event_date
+     FROM events
+     WHERE event_type = 'vs' AND event_date = ANY($1::date[])`,
+    [dates],
+  );
+
+  const skip = new Set(existing.map((e) => e.event_date));
+  const toWrite = dates.filter((d) => !skip.has(d));
+
+  if (toWrite.length === 0) {
+    return { error: "Every date in this file has already been logged." };
+  }
+
+  // Renames and new players first, so every entry has an id to write against.
+  const resolved = [];
+
+  for (const entry of entries) {
+    if (entry.target === "new") {
+      const created = await query(
+        `INSERT INTO players (name, status, status_date)
+         VALUES ($1, 'active', CURRENT_DATE)
+         ON CONFLICT (name) DO UPDATE
+           SET status = 'active', status_date = CURRENT_DATE
+         RETURNING id`,
+        [entry.csvName.trim()],
+      );
+      resolved.push({ playerId: created[0].id, cells: entry.cells });
+      continue;
+    }
+
+    const playerId = Number(entry.target);
+    if (!Number.isInteger(playerId) || playerId <= 0) continue;
+
+    if (entry.rename) {
+      await query("UPDATE players SET name = $1 WHERE id = $2", [
+        entry.csvName.trim(),
+        playerId,
+      ]);
+    }
+
+    resolved.push({ playerId, cells: entry.cells });
+  }
+
+  let written = 0;
+
+  for (const date of toWrite) {
+    const eventRows = await query(
+      `INSERT INTO events (event_type, event_date)
+       VALUES ('vs', $1)
+       ON CONFLICT (event_type, event_date)
+       DO UPDATE SET event_type = EXCLUDED.event_type
+       RETURNING id`,
+      [date],
+    );
+
+    const eventId = eventRows[0].id;
+
+    for (const player of resolved) {
+      const cell = player.cells.find((c) => c.date === date);
+
+      // No value means no row: the player was not in the alliance that day,
+      // which is different from being present and scoring nothing.
+      if (!cell || cell.value === null || cell.value === undefined) continue;
+
+      await query(
+        `INSERT INTO scores (player_id, event_id, measure, value)
+         VALUES ($1, $2, 'vs', $3)
+         ON CONFLICT (player_id, event_id, measure)
+         DO UPDATE SET value = EXCLUDED.value`,
+        [player.playerId, eventId, cell.value],
+      );
+
+      written += 1;
+    }
+  }
+
+  revalidatePath("/log");
+  revalidatePath("/rankings");
+  revalidatePath("/");
+
+  return {
+    written,
+    events: toWrite.length,
+    skippedDates: skip.size,
+  };
 }
