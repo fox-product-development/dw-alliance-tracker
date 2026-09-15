@@ -62,3 +62,12 @@ INSERT INTO settings (key, value, text_value) VALUES
   ('car_range_5', 0, '200-400'),
   ('car_range_6', 0, '<200')
 ON CONFLICT (key) DO NOTHING;
+
+CREATE TABLE IF NOT EXISTS records (
+  key         TEXT NOT NULL,
+  rank        INTEGER NOT NULL DEFAULT 1,
+  value       NUMERIC NOT NULL,
+  week_start  DATE NOT NULL,
+  player_name TEXT,
+  PRIMARY KEY (key, rank)
+);

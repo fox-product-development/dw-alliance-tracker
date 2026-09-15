@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { query } from "../../lib/db";
+import { rebuildRecords } from "../../lib/records";
 
 const BGB_OPTIONS = {
   no_response: 0,
@@ -130,6 +131,8 @@ export async function logEvent(formData) {
     }
   }
 
+  if (eventType === "vs") await rebuildRecords();
+
   revalidatePath("/log");
   revalidatePath("/rankings");
   revalidatePath("/");
@@ -224,6 +227,8 @@ export async function importVs(entries, dates) {
       written += 1;
     }
   }
+
+  await rebuildRecords();
 
   revalidatePath("/log");
   revalidatePath("/rankings");

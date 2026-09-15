@@ -436,7 +436,9 @@ export default async function Home() {
       <div className="section-label">Last 28 days</div>
 
       <div style={{ marginBottom: "12px" }}>
-        <StatCard {...vsCard} trend={vsTrend} />
+        <Link href="/league" className="card-link">
+          <StatCard {...vsCard} trend={vsTrend} />
+        </Link>
       </div>
 
       <div className="stat-row two">
