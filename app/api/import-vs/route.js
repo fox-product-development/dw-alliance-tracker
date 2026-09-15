@@ -96,7 +96,14 @@ export async function POST(request) {
     }
 
     const header = rows[0];
-    const dates = [];
+
+    // The header may carry the dates twice: scores first, then the same
+    // dates again for holiday markers. The second block starts at the
+    // first repeated date, so a file with no holiday columns parses the
+    // same way it always did.
+    const scoreCols = [];
+    const holidayCols = [];
+    const seen = new Set();
 
     for (let i = 1; i < header.length; i++) {
       const iso = parseDate(header[i]);
@@ -106,14 +113,38 @@ export async function POST(request) {
           { status: 400 },
         );
       }
-      dates.push({ index: i, iso });
+
+      if (seen.has(iso)) {
+        holidayCols.push({ index: i, iso });
+      } else {
+        seen.add(iso);
+        scoreCols.push({ index: i, iso });
+      }
     }
 
-    if (dates.length === 0) {
+    if (scoreCols.length === 0) {
       return NextResponse.json(
         { error: "The header has no date columns." },
         { status: 400 },
       );
+    }
+
+    // A holiday block that does not mirror the score block exactly means
+    // the markers cannot be trusted to line up with the right days.
+    if (holidayCols.length > 0) {
+      const mismatch =
+        holidayCols.length !== scoreCols.length ||
+        holidayCols.some((c, i) => c.iso !== scoreCols[i].iso);
+
+      if (mismatch) {
+        return NextResponse.json(
+          {
+            error:
+              "The holiday columns do not match the score columns. They must repeat the same dates in the same order.",
+          },
+          { status: 400 },
+        );
+      }
     }
 
     const players = await query(
@@ -126,7 +157,7 @@ export async function POST(request) {
       `SELECT event_date::text AS event_date
        FROM events
        WHERE event_type = $1 AND event_date = ANY($2::date[])`,
-      [EVENT_TYPE, dates.map((d) => d.iso)],
+      [EVENT_TYPE, scoreCols.map((d) => d.iso)],
     );
 
     const alreadyLogged = new Set(existing.map((e) => e.event_date));
@@ -134,6 +165,7 @@ export async function POST(request) {
     const parsed = [];
     const flags = [];
     const bad = [];
+    const orphanHolidays = [];
 
     for (const row of rows.slice(1)) {
       const csvName = String(row[0] ?? "").trim();
@@ -141,8 +173,22 @@ export async function POST(request) {
 
       const cells = [];
 
-      for (const col of dates) {
+      for (let c = 0; c < scoreCols.length; c++) {
+        const col = scoreCols[c];
         const raw = String(row[col.index] ?? "").trim();
+
+        const holidayCol = holidayCols[c];
+        const holidayRaw = holidayCol
+          ? String(row[holidayCol.index] ?? "")
+              .trim()
+              .toLowerCase()
+          : "";
+        const holiday = holidayRaw === "h";
+
+        if (holidayCol && holidayRaw !== "" && !holiday) {
+          bad.push({ csvName, date: col.iso, raw: holidayRaw });
+        }
+
         const result = parseValue(raw);
 
         if (result.bad) {
@@ -152,6 +198,7 @@ export async function POST(request) {
         }
 
         if (result.skip) {
+          if (holiday) orphanHolidays.push({ csvName, date: col.iso });
           cells.push({ date: col.iso, raw, value: null });
           continue;
         }
@@ -171,6 +218,7 @@ export async function POST(request) {
           date: col.iso,
           raw,
           value: result.value,
+          holiday,
           flagged: !!result.flag,
         });
       }
@@ -194,11 +242,13 @@ export async function POST(request) {
     return NextResponse.json({
       rows: parsed,
       players,
-      dates: dates.map((d) => d.iso),
+      dates: scoreCols.map((d) => d.iso),
+      hasHolidays: holidayCols.length > 0,
       alreadyLogged: Array.from(alreadyLogged),
       unclaimed: players.filter((p) => !claimed.has(p.id)).map((p) => p.id),
       flags,
       bad,
+      orphanHolidays,
       fileName: file.name,
     });
   } catch (err) {

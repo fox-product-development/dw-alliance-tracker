@@ -217,11 +217,11 @@ export async function importVs(entries, dates) {
       if (!cell || cell.value === null || cell.value === undefined) continue;
 
       await query(
-        `INSERT INTO scores (player_id, event_id, measure, value)
-         VALUES ($1, $2, 'vs', $3)
+        `INSERT INTO scores (player_id, event_id, measure, value, reason)
+         VALUES ($1, $2, 'vs', $3, $4)
          ON CONFLICT (player_id, event_id, measure)
-         DO UPDATE SET value = EXCLUDED.value`,
-        [player.playerId, eventId, cell.value],
+         DO UPDATE SET value = EXCLUDED.value, reason = EXCLUDED.reason`,
+        [player.playerId, eventId, cell.value, cell.holiday ? "holiday" : null],
       );
 
       written += 1;

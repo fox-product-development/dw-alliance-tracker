@@ -197,6 +197,16 @@ export default function CsvImport() {
             ))}
           </div>
 
+          {data.orphanHolidays && data.orphanHolidays.length > 0 && (
+            <div className="msg-warn">
+              {data.orphanHolidays.length} holiday marker(s) sit on days with no
+              score and will be ignored:{" "}
+              {data.orphanHolidays
+                .map((h) => `${h.csvName} ${h.date}`)
+                .join(", ")}
+            </div>
+          )}
+
           {data.bad.length > 0 && (
             <div className="msg-err">
               {data.bad.length} cell(s) could not be read and will be ignored:{" "}
@@ -316,6 +326,17 @@ export default function CsvImport() {
                         }}
                       >
                         {row.csvName}
+                        {row.cells.some((c) => c.holiday) && (
+                          <span
+                            className="mono"
+                            style={{
+                              marginLeft: "8px",
+                              color: "var(--accent)",
+                            }}
+                          >
+                            {row.cells.filter((c) => c.holiday).length} holiday
+                          </span>
+                        )}
                       </td>
 
                       <td>
