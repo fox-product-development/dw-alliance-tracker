@@ -98,6 +98,7 @@ export default async function Home() {
   const mostRecent = {};
   let vsTrend = [];
   let bgb = null;
+  let bgbTrend = [];
   let error = null;
 
   try {
@@ -228,6 +229,25 @@ export default async function Home() {
       for (const r of bgbRows) breakdown[r.reason || "no_response"] = r.count;
       bgb = { date: bgbRows[0].event_date, breakdown };
     }
+
+    const bgbTrendRows = await query(
+      `SELECT e.event_date,
+              COUNT(*) FILTER (
+                WHERE s.value = 1 AND p.status = 'active'
+              )::int AS attended
+       FROM events e
+       LEFT JOIN scores s ON s.event_id = e.id AND s.measure = 'black_gold'
+       LEFT JOIN players p ON p.id = s.player_id
+       WHERE e.event_type = 'black_gold'
+       GROUP BY e.id, e.event_date
+       ORDER BY e.event_date ASC`,
+      [],
+    );
+
+    bgbTrend = bgbTrendRows.map((r) => ({
+      date: r.event_date,
+      value: r.attended,
+    }));
   } catch (err) {
     error = err.message;
   }
@@ -447,7 +467,7 @@ export default async function Home() {
       </div>
 
       <div style={{ marginBottom: "12px" }}>
-        <BgbCard data={bgb} playerCount={playerCount} />
+        <BgbCard data={bgb} playerCount={playerCount} trend={bgbTrend} />
       </div>
 
       <div className="stat-row three">
@@ -475,7 +495,93 @@ export default async function Home() {
   );
 }
 
-function BgbCard({ data, playerCount }) {
+const BGB_MAX_PLAYERS = 60;
+
+function BgbTrendChart({ points, colour }) {
+  if (!points || points.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: "14px" }}>
+      <div
+        className="mono"
+        style={{ letterSpacing: "1px", marginBottom: "6px" }}
+      >
+        selected and attended, per event (scale 0–{BGB_MAX_PLAYERS})
+      </div>
+      <div
+        role="img"
+        aria-label={`Black Gold attendance across ${points.length} events`}
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: "2px",
+          height: "94px",
+          paddingTop: "14px",
+          boxSizing: "border-box",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        {points.map((p, i) => {
+          const pct =
+            (Math.min(p.value, BGB_MAX_PLAYERS) / BGB_MAX_PLAYERS) * 100;
+
+          return (
+            <div
+              key={i}
+              style={{
+                flex: 1,
+                height: "100%",
+                position: "relative",
+                display: "flex",
+                alignItems: "flex-end",
+              }}
+            >
+              <div
+                className="mono"
+                style={{
+                  position: "absolute",
+                  bottom: `${pct}%`,
+                  left: 0,
+                  right: 0,
+                  textAlign: "center",
+                  fontSize: "10px",
+                  lineHeight: 1.2,
+                  color: colour,
+                }}
+              >
+                {p.value}
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: `${pct}%`,
+                  background: colour,
+                  opacity: 0.85,
+                  borderRadius: "2px 2px 0 0",
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div
+        className="mono"
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          marginTop: "4px",
+          letterSpacing: "1px",
+        }}
+      >
+        <span>{formatShort(points[0].date)}</span>
+        <span>{points.length} events</span>
+        <span>{formatShort(points[points.length - 1].date)}</span>
+      </div>
+    </div>
+  );
+}
+
+function BgbCard({ data, playerCount, trend }) {
   const colour = "#e6b515";
 
   const items = [
@@ -540,6 +646,8 @@ function BgbCard({ data, playerCount }) {
               </div>
             ))}
           </div>
+
+          <BgbTrendChart points={trend} colour={colour} />
 
           <div
             style={{
