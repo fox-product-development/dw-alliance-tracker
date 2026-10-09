@@ -231,6 +231,7 @@ export default function LogForm({ players }) {
                         name={`p_${p.id}`}
                         type="number"
                         step="any"
+                        onWheel={(e) => e.currentTarget.blur()}
                         style={{ width: "90px", textAlign: "right" }}
                       />
                     ) : (
