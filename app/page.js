@@ -99,6 +99,7 @@ export default async function Home() {
   let vsTrend = [];
   let bgb = null;
   let bgbTrend = [];
+  let carCp = null;
   let error = null;
 
   try {
@@ -248,6 +249,51 @@ export default async function Home() {
       date: r.event_date,
       value: r.attended,
     }));
+
+    const latestPoll = await query(
+      `SELECT id, event_date
+       FROM events
+       WHERE event_type = 'poll'
+       ORDER BY event_date DESC, id DESC
+       LIMIT 1`,
+      [],
+    );
+
+    if (latestPoll.length > 0) {
+      const carRows = await query(
+        `SELECT s.value, COUNT(*)::int AS count
+         FROM scores s
+         JOIN players p ON p.id = s.player_id AND p.status = 'active'
+         WHERE s.measure = 'car_cp' AND s.event_id = $1
+         GROUP BY s.value`,
+        [latestPoll[0].id],
+      );
+
+      const rangeRows = await query(
+        `SELECT key, text_value FROM settings WHERE key LIKE 'car_range_%'`,
+        [],
+      );
+
+      const rangeLabels = {};
+      for (const r of rangeRows) rangeLabels[r.key] = r.text_value;
+
+      const carCounts = {};
+      let responded = 0;
+      for (const r of carRows) {
+        carCounts[Number(r.value)] = r.count;
+        responded += r.count;
+      }
+
+      carCp = {
+        date: latestPoll[0].event_date,
+        ranges: [1, 2, 3, 4, 5, 6].map((n) => ({
+          rank: n,
+          label: rangeLabels[`car_range_${n}`] || `Rank ${n}`,
+          count: carCounts[n] || 0,
+        })),
+        noResponse: playerCount - responded,
+      };
+    }
   } catch (err) {
     error = err.message;
   }
@@ -476,6 +522,10 @@ export default async function Home() {
         ))}
       </div>
 
+      <div style={{ marginTop: "12px" }}>
+        <CarCpCard data={carCp} playerCount={playerCount} />
+      </div>
+
       <p style={{ marginTop: "24px", textAlign: "center" }}>
         <Link
           href="/rankings"
@@ -658,6 +708,182 @@ function BgbCard({ data, playerCount, trend }) {
           >
             <span className="mono" style={{ letterSpacing: "1px" }}>
               last event {formatShort(data.date)} · {playerCount} on roster
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function CarCpChart({ ranges, colour }) {
+  if (!ranges || ranges.length === 0) return null;
+
+  const max = Math.max(...ranges.map((r) => r.count), 1);
+
+  return (
+    <div style={{ marginTop: "14px" }}>
+      <div
+        className="mono"
+        style={{ letterSpacing: "1px", marginBottom: "6px" }}
+      >
+        players per range, latest poll
+      </div>
+      <div
+        role="img"
+        aria-label="Car CP players per range from the latest poll"
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          gap: "2px",
+          height: "94px",
+          paddingTop: "14px",
+          boxSizing: "border-box",
+          borderBottom: "1px solid var(--border)",
+        }}
+      >
+        {ranges.map((r) => {
+          const pct = (r.count / max) * 100;
+
+          return (
+            <div
+              key={r.rank}
+              style={{
+                flex: 1,
+                height: "100%",
+                position: "relative",
+                display: "flex",
+                alignItems: "flex-end",
+              }}
+            >
+              <div
+                className="mono"
+                style={{
+                  position: "absolute",
+                  bottom: `${pct}%`,
+                  left: 0,
+                  right: 0,
+                  textAlign: "center",
+                  fontSize: "10px",
+                  lineHeight: 1.2,
+                  color: colour,
+                }}
+              >
+                {r.count}
+              </div>
+              <div
+                style={{
+                  width: "100%",
+                  height: `${pct}%`,
+                  background: colour,
+                  opacity: 0.85,
+                  borderRadius: "2px 2px 0 0",
+                }}
+              />
+            </div>
+          );
+        })}
+      </div>
+      <div
+        className="mono"
+        style={{
+          display: "flex",
+          gap: "2px",
+          marginTop: "4px",
+          letterSpacing: "1px",
+        }}
+      >
+        {ranges.map((r) => (
+          <span key={r.rank} style={{ flex: 1, textAlign: "center" }}>
+            {r.rank}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CarCpCard({ data, playerCount }) {
+  const colour = "#5ad1e6";
+
+  return (
+    <div style={card}>
+      <div
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          right: 0,
+          height: "2px",
+          background: colour,
+          opacity: 0.85,
+        }}
+      />
+      <div style={statLabel}>Car CP</div>
+
+      {!data ? (
+        <>
+          <div style={{ ...statValue, color: "var(--text-dim)" }}>—</div>
+          <div
+            className="mono"
+            style={{ marginTop: "4px", letterSpacing: "1px" }}
+          >
+            no polls logged yet
+          </div>
+        </>
+      ) : (
+        <>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+              gap: "12px",
+              marginTop: "4px",
+            }}
+          >
+            {data.ranges.map((r) => (
+              <div key={r.rank}>
+                <div
+                  style={{
+                    ...statValue,
+                    color: colour,
+                    textShadow: `0 0 10px ${colour}44`,
+                  }}
+                >
+                  {r.count}
+                </div>
+                <div
+                  className="mono"
+                  style={{ marginTop: "2px", letterSpacing: "1px" }}
+                >
+                  {r.rank} · {r.label}
+                </div>
+              </div>
+            ))}
+            <div>
+              <div style={{ ...statValue, color: "var(--text-dim)" }}>
+                {data.noResponse}
+              </div>
+              <div
+                className="mono"
+                style={{ marginTop: "2px", letterSpacing: "1px" }}
+              >
+                no response
+              </div>
+            </div>
+          </div>
+
+          <CarCpChart ranges={data.ranges} colour={colour} />
+
+          <div
+            style={{
+              marginTop: "14px",
+              paddingTop: "10px",
+              borderTop: "1px solid var(--border)",
+            }}
+          >
+            <span className="mono" style={{ letterSpacing: "1px" }}>
+              last poll {formatShort(data.date)} · {playerCount} on roster
             </span>
           </div>
         </>
