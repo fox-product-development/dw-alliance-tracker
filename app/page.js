@@ -795,7 +795,7 @@ function CarCpChart({ ranges, colour }) {
       >
         {ranges.map((r) => (
           <span key={r.rank} style={{ flex: 1, textAlign: "center" }}>
-            {r.rank}
+            {r.label}
           </span>
         ))}
       </div>
@@ -833,43 +833,15 @@ function CarCpCard({ data, playerCount }) {
         </>
       ) : (
         <>
-          <div
-            style={{
-              display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
-              gap: "12px",
-              marginTop: "4px",
-            }}
-          >
-            {data.ranges.map((r) => (
-              <div key={r.rank}>
-                <div
-                  style={{
-                    ...statValue,
-                    color: colour,
-                    textShadow: `0 0 10px ${colour}44`,
-                  }}
-                >
-                  {r.count}
-                </div>
-                <div
-                  className="mono"
-                  style={{ marginTop: "2px", letterSpacing: "1px" }}
-                >
-                  {r.rank} · {r.label}
-                </div>
-              </div>
-            ))}
-            <div>
-              <div style={{ ...statValue, color: "var(--text-dim)" }}>
-                {data.noResponse}
-              </div>
-              <div
-                className="mono"
-                style={{ marginTop: "2px", letterSpacing: "1px" }}
-              >
-                no response
-              </div>
+          <div style={{ marginTop: "4px" }}>
+            <div style={{ ...statValue, color: "var(--text-dim)" }}>
+              {data.noResponse}
+            </div>
+            <div
+              className="mono"
+              style={{ marginTop: "2px", letterSpacing: "1px" }}
+            >
+              no response
             </div>
           </div>
 
