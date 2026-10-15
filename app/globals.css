@@ -753,3 +753,22 @@ input[type="number"] {
 .card-link:hover > div {
   border-color: var(--text-dim);
 }
+/* Rankings: header row stays put while the table scrolls inside its own
+   box. Change --visible-rows to show more or fewer players. */
+.lock-header {
+  --visible-rows: 10;
+  max-height: calc(34px + var(--visible-rows) * 42px);
+  overflow-y: auto;
+}
+
+.lock-header table.data th {
+  position: sticky;
+  top: 0;
+  background: #0d1018;
+  z-index: 3;
+}
+
+.lock-header table.data th.lock-1,
+.lock-header table.data th.lock-2 {
+  z-index: 4;
+}

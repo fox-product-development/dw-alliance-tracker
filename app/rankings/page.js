@@ -231,7 +231,7 @@ export default async function RankingsPage({ searchParams }) {
         </div>
       </div>
 
-      <div className="panel scroll-x">
+      <div className="panel scroll-x lock-header">
         <table className="data">
           <thead>
             <tr>
